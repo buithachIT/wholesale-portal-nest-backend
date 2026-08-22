@@ -1,0 +1,2879 @@
+# B2B LOGISTICS SYSTEM
+
+# ACTIVITY FLOW
+
+# ============================================================
+
+## 1. MỤC ĐÍCH
+
+Tài liệu này mô tả các luồng hoạt động nghiệp vụ chính của B2B
+Logistics System từ lúc người dùng đăng nhập, xem catalog, tạo đơn
+hàng, xử lý thanh toán, công nợ, wallet, điều phối vận chuyển,
+webhook, notification cho đến khi đơn hàng được giao hoàn tất.
+
+Hệ thống không triển khai Warehouse Management.
+
+Trường `stock` trong `product_variants` chỉ phục vụ logic kiểm tra
+số lượng sản phẩm trong phạm vi catalog/order system nếu nghiệp vụ
+yêu cầu.
+
+# ============================================================
+
+## 2. ACTORS
+
+# ============================================================
+
+### 2.1. EXTERNAL USER
+
+Người dùng thuộc một `company`.
+
+Có thể thực hiện các nghiệp vụ tùy theo role/permission:
+
+- Đăng nhập.
+- Xem product catalog.
+- Xem product.
+- Xem product variant.
+- Xem variant images.
+- Xem pricing tiers.
+- Tạo order.
+- Theo dõi order.
+- Khai báo payment.
+- Theo dõi payment.
+- Xem credit.
+- Xem wallet.
+- Nhận notification.
+
+External user chỉ được truy cập dữ liệu thuộc company của mình.
+
+---
+
+### 2.2. INTERNAL USER
+
+Người dùng thuộc hệ thống nội bộ.
+
+Internal user có:
+
+`company_id = NULL`
+
+Có thể được gán các role:
+
+- `SUPER_ADMIN`
+- `ADMIN`
+- `ACCOUNTANT`
+
+Quyền thực tế được xác định bằng RBAC.
+
+---
+
+### 2.3. ADMIN
+
+Có quyền quản trị các nghiệp vụ được cấp bằng permission.
+
+Có thể bao gồm:
+
+- Quản lý categories.
+- Quản lý products.
+- Quản lý product variants.
+- Quản lý product variant images.
+- Quản lý pricing tiers.
+- Quản lý external users.
+- Duyệt order.
+- Hủy order.
+- Điều phối logistics.
+- Theo dõi logistics.
+- Quản lý truck types.
+- Quản lý shipping carriers.
+- Theo dõi webhook logs.
+- Các nghiệp vụ khác tùy permission.
+
+---
+
+### 2.4. SUPER_ADMIN
+
+Có quyền quản trị hệ thống ở mức cao nhất.
+
+Có thể bao gồm:
+
+- Quản lý companies.
+- Cấp/điều chỉnh credit limit.
+- Quản lý roles.
+- Quản lý permissions.
+- Quản lý internal users.
+- Quản lý system configuration.
+- Thực hiện các administrative operations đặc biệt.
+
+Quyền thực tế vẫn phải được kiểm tra bằng permission ở backend.
+
+---
+
+### 2.5. ACCOUNTANT
+
+Phụ trách nghiệp vụ tài chính.
+
+Có thể bao gồm:
+
+- Xem payments.
+- Xác minh payments.
+- Approve payments.
+- Reject payments.
+- Theo dõi công nợ.
+- Theo dõi credit transactions.
+- Theo dõi wallet.
+- Theo dõi wallet transactions.
+- Điều chỉnh credit/wallet nếu được cấp permission.
+
+---
+
+### 2.6. SHIPPING CARRIER
+
+Là hệ thống hoặc đối tác vận chuyển bên ngoài.
+
+Trao đổi dữ liệu với hệ thống thông qua:
+
+- API.
+- Webhook.
+
+Có thể cung cấp:
+
+- Tracking number.
+- Shipment status.
+- Shipment events.
+- Delivery completed event.
+- Shipment failure event.
+
+# ============================================================
+
+## 3. AUTHENTICATION FLOW
+
+# ============================================================
+
+User
+|
+v
++------------------+
+| Login            |
++--------+---------+
+         |
+         v
+Validate email/password
+         |
+         +---- Invalid ----> Authentication Error
+         |
+         v
+Check user.status
+         |
+         +---- suspended ---> Reject Login
+         |
+         v
+Load User
+         |
+         v
+Load Roles
+         |
+         v
+Load Permissions
+         |
+         v
+Create Authentication Session / Token
+         |
+         v
+Access Application
+         |
+         v
+Authorization performed on every protected request
+
+Authentication không đồng nghĩa với authorization.
+
+Authentication xác định user là ai.
+
+Authorization xác định user được phép làm gì.
+
+# ============================================================
+
+## 4. REQUEST AUTHORIZATION FLOW
+
+# ============================================================
+
+HTTP Request
+|
+v
+Authentication Middleware
+|
+v
+Identify User
+|
+v
+Check user.status
+|
++---- suspended ----> Reject Request
+|
+v
+Load Roles
+|
+v
+Load Permissions
+|
+v
+Authorization Middleware
+|
+v
+Check Required Permission
+|
++---- Missing ----> 403 Forbidden
+|
+v
+Check Company Scope / Ownership
+|
++---- Invalid ----> 403 Forbidden
+|
+v
+Controller
+|
+v
+Service
+|
+v
+Business Rules
+|
+v
+Database
+
+Frontend chỉ sử dụng permission để:
+
+- Hiển thị/ẩn UI.
+- Disable action.
+- Điều hướng.
+
+Backend mới là nơi quyết định authorization thực sự.
+
+# ============================================================
+
+## 5. PRODUCT CATALOG FLOW
+
+# ============================================================
+
+User
+|
+v
+Open Product Catalog
+|
+v
+Load Categories
+|
+v
+Load Products
+|
+v
+Load Product Variants
+|
++--> SKU
++--> title
++--> stock
++--> CBM
++--> weight
++--> base_price
+|
++--> Load Product Thumbnail
+|
++--> Load Variant Images
+|
++--> Load Pricing Tiers
+|
+v
+Display Product Catalog
+
+# ============================================================
+
+## 6. PRODUCT DETAIL FLOW
+
+# ============================================================
+
+User
+|
+v
+Open Product Detail
+|
+v
+Load Product
+|
++--> category
++--> name
++--> description
++--> thumbnail
++--> MOQ
+|
+v
+Load Product Variants
+|
++--> SKU
++--> title
++--> stock
++--> CBM
++--> weight
++--> base_price
++--> images
+|
+v
+User selects Variant
+|
+v
+Enter Quantity
+|
+v
+Validate Quantity
+|
++---- Invalid ----> Show Quantity Error
+|
+v
+Validate MOQ
+|
++---- Invalid ----> Show MOQ Error
+|
+v
+Validate Stock nếu stock được sử dụng
+|
++---- Insufficient ----> Show Quantity Error
+|
+v
+Find Pricing Tier
+|
+v
+Calculate Discount
+|
+v
+Calculate Price Per Box
+|
+v
+Calculate Subtotal
+|
+v
+Display Calculated Price
+
+# ============================================================
+
+## 7. PRICING CALCULATION FLOW
+
+# ============================================================
+
+Input:
+
+- `product_variant_id`
+- `quantity`
+
+|
+v
+
+Load `product_variants.base_price`
+|
+v
+Load applicable `pricing_tiers`
+|
+v
+Find matching pricing tier
+|
+v
+Read `discount_percent`
+|
+v
+
+Calculate:
+
+discount_amount =
+base_price * discount_percent / 100
+
+|
+v
+
+Calculate:
+
+price_per_box =
+base_price - discount_amount
+
+|
+v
+
+Calculate:
+
+subtotal =
+price_per_box * quantity
+
+|
+v
+
+Return:
+
+- base_price
+- discount_percent
+- price_per_box
+- quantity
+- subtotal
+
+Pricing calculation phải được thực hiện lại ở backend khi tạo order.
+
+Không tin giá được gửi từ frontend.
+
+# ============================================================
+
+## 8. CREATE ORDER FLOW
+
+# ============================================================
+
+External User
+|
+v
+Select Product Variant
+|
+v
+Enter Quantity
+|
+v
+Validate:
+|
++--> User active?
++--> Company active?
++--> Variant exists?
++--> Variant active?
++--> Quantity valid?
++--> Quantity >= MOQ?
++--> Stock sufficient nếu stock được sử dụng?
+|
+v
+Load Current Catalog Data
+|
+v
+Find Pricing Tier
+|
+v
+Calculate Discount
+|
+v
+Calculate Price Per Box
+|
+v
+Calculate Order Total
+|
+v
+Calculate Total CBM
+|
+v
+Select Payment Method
+|
++-----------------------------+
+|                             |
+v                             v
+credit                    bank_transfer
+|                             |
+v                             v
+Validate Credit          Continue
+Availability
+|
++---- Insufficient ----> Reject Order
+|
+v
+Begin Database Transaction
+|
+v
+Lock / Re-check Company Credit
+|
+v
+Recalculate / Confirm Order Total
+|
+v
+Create Order
+|
+v
+Create Order Item Snapshots
+|
+v
+If payment_method = credit:
+|
++--> Decrease remaining_credit
+|
++--> Create credit_transaction
+|    type = credit_reserved
+|
+v
+Set:
+order.status = pending
+|
+v
+Set:
+order.payment_status = unpaid
+|
+v
+Commit Transaction
+|
+v
+Create Notification
+|
+v
+Return Order
+
+Nếu bất kỳ bước financial nào thất bại:
+
+ROLLBACK toàn bộ transaction.
+
+# ============================================================
+
+## 9. ORDER ITEM SNAPSHOT FLOW
+
+# ============================================================
+
+Current Product Catalog
+|
+v
+Read Product
+|
++--> product.name
+|
+v
+Read Product Variant
+|
++--> variant.title
++--> SKU
++--> base_price
++--> CBM
++--> weight
+|
+v
+Calculate Pricing
+|
+v
+Create `order_items` snapshot
+|
++--> product_name
++--> variant_title
++--> sku
++--> base_price_per_box
++--> discount_percent
++--> price_per_box
++--> cbm_per_box
++--> weight_per_box
++--> quantity
+|
+v
+Order history becomes independent
+from future catalog changes.
+
+Nếu product hoặc product variant thay đổi sau này:
+
+Existing `order_items` không thay đổi.
+
+# ============================================================
+
+## 10. CREDIT ORDER FLOW
+
+# ============================================================
+
+Customer selects:
+
+payment_method = credit
+
+|
+v
+Check company.remaining_credit
+|
+v
+Compare:
+
+remaining_credit >= order.total_price
+
+|
++---- NO ----> Reject Order
+|
+v
+Begin Transaction
+|
+v
+Lock Company Row
+|
+v
+Re-check remaining_credit
+|
++---- Insufficient ----> ROLLBACK
+|
+v
+Create Order
+|
+v
+Create Order Items
+|
+v
+Decrease:
+
+companies.remaining_credit
+
+|
+v
+Create:
+
+credit_transactions
+
+type:
+credit_reserved
+
+amount:
+-negative reserved amount
+
+balance_after:
+-new remaining_credit
+
+|
+v
+Commit Transaction
+|
+v
+Order continues to approval process
+
+# ============================================================
+
+## 11. BANK TRANSFER PAYMENT FLOW
+
+# ============================================================
+
+Customer
+|
+v
+Create Order
+|
+v
+order.payment_status = unpaid
+|
+v
+Customer transfers money
+|
+v
+Customer creates Payment Declaration
+|
+v
+Create Payment
+|
++--> company_id
++--> user_id
++--> amount
++--> bank_reference
++--> status = pending
+|
+v
+Notify Accountant
+|
+v
+Accountant verifies bank transaction
+|
++---------------------------+
+|                           |
+v                           v
+Valid                     Invalid
+|                           |
+v                           v
+Approve                   Reject
+|                           |
+v                           v
+status = approved         status = rejected
+                            |
+                            v
+                         Save rejection data
+                            |
+                            +--> rejected_at
+                            +--> rejected_by
+                            +--> rejection_reason
+|
+v
+Payment Allocation
+|
+v
+Update Order Payment Status
+|
+v
+Create Notification
+
+# ============================================================
+
+## 12. PAYMENT APPROVAL FLOW
+
+# ============================================================
+
+Accountant
+|
+v
+Open Pending Payment
+|
+v
+Verify:
+|
++--> company
++--> amount
++--> bank_reference
++--> actual bank transaction
+|
+v
+Approve?
+|
++---------------------------+
+|                           |
+v                           v
+YES                         NO
+|                           |
+v                           v
+status = approved           status = rejected
+|                           |
+v                           v
+Allocate Payment             Save:
+                            rejected_at
+                            rejected_by
+                            rejection_reason
+|
+v
+Update Related Financial State
+|
+v
+Create Notification
+
+Payment approval và payment allocation phải được xử lý trong
+database transaction khi làm thay đổi financial state.
+
+# ============================================================
+
+## 13. PAYMENT ALLOCATION FLOW
+
+# ============================================================
+
+Approved Payment
+|
+v
+Read payment.amount
+|
+v
+Determine Allocatable Amount
+|
+v
+Select Eligible Orders
+|
+v
+Allocate amount to Order A
+|
+v
+Remaining amount?
+|
++---- YES ----> Allocate to Order B
+|                    |
+|                    v
+|              Continue Allocation
+|
+v
+Stop when:
+|
++--> Payment fully allocated
+|
+OR
+|
++--> No eligible order remains
+|
+v
+Remaining amount > 0?
+|
++---- NO ----> End
+|
+v
+YES
+|
+v
+Create wallet_transaction
+|
+type = overpayment
+|
+v
+Increase company.wallet_balance
+|
+v
+Save balance_after
+
+Một payment có thể được phân bổ cho nhiều orders.
+
+Một order có thể nhận allocation từ nhiều payments.
+
+# ============================================================
+
+## 14. ORDER PAYMENT STATUS FLOW
+
+# ============================================================
+
+For each Order:
+
+allocated_amount =
+SUM(order_payments.amount_allocated)
+
+|
+v
+
+Compare with order.total_price
+|
++---- allocated_amount = 0 --------> unpaid
+|
++---- 0 < allocated < total --------> partial
+|
++---- allocated_amount = total -----> paid
+
+Order.payment_status được quản lý độc lập
+với Order.status.
+
+Ví dụ hợp lệ:
+
+order.status = shipping
+order.payment_status = unpaid
+
+# ============================================================
+
+## 15. CREDIT DEBT PAYMENT FLOW
+
+# ============================================================
+
+Credit Order
+|
+v
+Order được approve / giao hàng
+|
+v
+Company phát sinh khoản phải trả
+|
+v
+Company chuyển tiền
+|
+v
+Payment = pending
+|
+v
+Accountant Approves Payment
+|
+v
+Allocate Payment to Credit Order
+|
+v
+Create credit_transaction
+|
+type = debt_payment
+|
+v
+Increase company.remaining_credit
+|
+v
+Save balance_after
+|
+v
+Update order.payment_status
+|
+v
+Create Notification
+
+Lưu ý:
+
+`remaining_credit` là phần hạn mức còn khả dụng.
+
+Khi credit được reserve:
+
+remaining_credit giảm.
+
+Khi khoản nợ được thanh toán:
+
+remaining_credit tăng trở lại theo số tiền đã thanh toán.
+
+# ============================================================
+
+## 16. WALLET OVERPAYMENT FLOW
+
+# ============================================================
+
+Approved Payment
+|
+v
+Allocate Payment to Orders
+|
+v
+Payment còn dư?
+|
++---- NO ----> End
+|
+v
+YES
+|
+v
+Create wallet_transaction
+|
+type = overpayment
+|
+amount = positive excess amount
+|
+v
+Increase:
+
+company.wallet_balance
+|
+v
+Save:
+
+balance_after
+|
+v
+Create Notification if required
+
+# ============================================================
+
+## 17. WALLET USAGE FLOW
+
+# ============================================================
+
+Company
+|
+v
+wallet_balance > 0
+|
+v
+Business operation requires wallet usage
+|
+v
+Check wallet_balance
+|
++---- Insufficient ----> Reject Wallet Usage
+|
+v
+Begin Transaction
+|
+v
+Lock Company Row
+|
+v
+Re-check wallet_balance
+|
+v
+Deduct wallet amount
+|
+v
+Create wallet_transaction
+|
+type = wallet_payment
+|
+amount = negative amount
+|
+balance_after = new wallet balance
+|
+v
+Commit Transaction
+
+Wallet là nguồn tiền dư/tiền ứng trước.
+
+Wallet không phải một `payment_method` độc lập trong order creation
+flow nếu order schema chỉ hỗ trợ:
+
+- credit
+- bank_transfer
+
+Wallet có thể được sử dụng trong các nghiệp vụ tài chính mà
+business rule cho phép.
+
+# ============================================================
+
+## 18. ORDER APPROVAL FLOW
+
+# ============================================================
+
+Admin
+|
+v
+Open Pending Order
+|
+v
+Review:
+|
++--> Customer
++--> Company
++--> Order Items
++--> Quantity
++--> Pricing Snapshot
++--> Payment Method
++--> Credit State
++--> Total Price
++--> Total CBM
+|
+v
+Approve?
+|
++-------------------------------+
+|                               |
+v                               v
+YES                             NO / CANCEL
+|                               |
+v                               v
+status = approved                status = cancelled
+|                               |
+v                               v
+approved_at                      cancelled_at
+approved_by                      cancelled_by
+|                               |
+v                               v
+Create Notification              Save cancellation reason
+|
+v
+Need Logistics Integration?
+|
++---- NO ----> Continue Business Process
+|
+v
+YES
+|
+v
+Create / Assign Logistics
+|
++---- Success ----> Continue to Shipping
+|
++---- Integration Failure ----> status = approved_local
+|
+v
+Retry Integration
+
+`approved_local` nghĩa là order đã được internal approval nhưng
+chưa đồng bộ thành công với carrier.
+
+# ============================================================
+
+## 19. ORDER CANCELLATION FLOW
+
+# ============================================================
+
+Cancellation Requested
+|
+v
+Check Permission
+|
+v
+Check Current Order Status
+|
++---- delivered ----> Cannot Cancel
+|
++---- cancelled ----> Already Cancelled
+|
++---- shipping -----> Apply Cancellation Policy
+|
+v
+Set:
+
+status = cancelled
+|
+v
+Set:
+
+cancelled_at
+cancelled_by
+cancellation_reason
+|
+v
+Credit Reserved?
+|
++---- NO ----> Continue
+|
+v
+YES
+|
+v
+Release Reserved Credit
+|
+v
+Create credit_transaction
+|
+type = credit_released
+|
+amount = positive released amount
+|
+balance_after = new remaining_credit
+|
+v
+Create Notification
+
+Nếu wallet/payment đã phát sinh trước thời điểm cancellation,
+phải xử lý financial state tương ứng theo business rule.
+
+# ============================================================
+
+## 20. LOGISTICS PLANNING FLOW
+
+# ============================================================
+
+Approved Order
+|
+v
+Read:
+|
++--> order.total_cbm
++--> order.total_weight nếu được sử dụng
+|
+v
+Load Active Truck Types
+|
+v
+Read:
+
+truck_type.max_cbm
+truck_type.max_weight_kg
+|
+v
+Determine Suitable Truck Type(s)
+|
+v
+Determine Number of Trips
+|
+v
+Create Logistics Records
+|
++--> order_id
++--> carrier_id
++--> truck_type_id
++--> planned_cbm
+|
+v
+Assign:
+|
++--> carrier
++--> truck type
++--> truck plate
++--> driver
+|
+v
+delivery_status = assigned
+|
+v
+Send Shipment Request to Carrier
+
+Truck capacity không được hard-code trong application logic.
+
+# ============================================================
+
+## 21. MULTI-TRIP LOGISTICS FLOW
+
+# ============================================================
+
+Order
+|
+v
+total_cbm = 72
+|
+v
+Planning
+|
++---------------------------+
+|                           |
+v                           v
+Logistics #1                Logistics #2
+planned_cbm = 60            planned_cbm = 12
+heavy_15t                   medium_2_5t
+|
+v
+Each Logistics has:
+|
++--> order_id
++--> carrier_id
++--> truck_type_id
++--> planned_cbm
++--> truck_plate
++--> driver_name
++--> tracking_number
++--> delivery_status
+
+Một order có thể có nhiều logistics.
+
+# ============================================================
+
+## 22. LOGISTICS STATUS FLOW
+
+# ============================================================
+
+`logistics.delivery_status`
+
+assigned
+|
+v
+in_transit
+|
+v
+completed
+
+Carrier có thể gửi event:
+
+- SHIPPED
+- DELIVERED
+- FAILED
+
+Nếu carrier báo FAILED:
+
+|
+v
+Record Provider Event
+|
+v
+Process Failure
+|
+v
+Retry / Reassign / Manual Handling
+|
+v
+Không đánh dấu logistics là completed.
+
+Không tự động thêm một status mới vào `delivery_status`
+nếu schema chỉ định nghĩa:
+
+- assigned
+- in_transit
+- completed
+
+# ============================================================
+
+## 23. ORDER SHIPPING FLOW
+
+# ============================================================
+
+Approved Order
+|
+v
+Logistics Created
+|
+v
+Carrier Assigned
+|
+v
+Shipment Request Sent
+|
+v
+Carrier Accepts Shipment
+|
+v
+Carrier starts shipment
+|
+v
+Logistics.delivery_status = in_transit
+|
+v
+Order.status = shipping
+|
+v
+Create Notification
+
+Với order có nhiều logistics:
+
+Order được chuyển sang `shipping` khi nghiệp vụ vận chuyển
+bắt đầu theo business rule.
+
+# ============================================================
+
+## 24. ORDER DELIVERY COMPLETION FLOW
+
+# ============================================================
+
+Carrier
+|
+v
+Send DELIVERED Webhook
+|
+v
+Receive Webhook
+|
+v
+Save Raw Payload
+|
+v
+Create logistics_webhook_logs
+|
+status = received
+|
+v
+Validate Webhook
+|
+v
+Find Logistics
+|
+v
+Update Logistics:
+|
+delivery_status = completed
+completed_at = now()
+|
+v
+Set Webhook:
+|
+status = processed
+processed_at = now()
+|
+v
+Check All Logistics of Order
+|
++---- Not All Completed ----> Keep order.status = shipping
+|
+v
+All Completed
+|
+v
+Set:
+
+order.status = delivered
+|
+v
+Create Notification
+
+Order không được chuyển sang `delivered`
+nếu vẫn còn logistics chưa `completed`.
+
+# ============================================================
+
+## 25. WEBHOOK FLOW
+
+# ============================================================
+
+Shipping Carrier
+|
+v
+POST /webhooks/{carrier}
+|
+v
+Receive Payload
+|
+v
+Validate Provider Source / Signature
+|
+v
+Save Raw Payload
+|
+v
+Create logistics_webhook_logs
+|
+status = received
+|
+v
+Validate:
+|
++--> Carrier
++--> Signature
++--> Event Type
++--> Tracking Number
+|
++---- Invalid ----> status = failed
+|                    |
+|                    +--> error_message
+|
+v
+Find Logistics
+|
++---- Not Found ----> status = failed
+|                     |
+|                     +--> error_message
+|
+v
+Check Duplicate Event
+|
++---- Duplicate ----> Ignore / Return Idempotent Response
+|
+v
+Process Event
+|
+v
+Update Logistics
+|
+v
+Set:
+
+webhook.status = processed
+processed_at = now()
+
+Raw webhook payload phải được lưu trước khi xử lý business logic.
+
+# ============================================================
+
+## 26. WEBHOOK RETRY FLOW
+
+# ============================================================
+
+Webhook
+|
+v
+status = failed
+|
+v
+Store:
+|
++--> raw payload
++--> error_message
++--> received_at
+|
+v
+Retry Mechanism
+|
+v
+Process Again
+|
++---- Success ----> processed
+|
++---- Failure ----> failed
+|
+v
+Retry Again / Manual Handling
+
+Webhook processing phải có cơ chế idempotency để tránh
+xử lý cùng một event nhiều lần.
+
+# ============================================================
+
+## 27. NOTIFICATION FLOW
+
+# ============================================================
+
+Business Event
+|
++--> Order Created
++--> Order Approved
++--> Order Cancelled
++--> Payment Submitted
++--> Payment Approved
++--> Payment Rejected
++--> Credit Changed
++--> Wallet Changed
++--> Logistics Assigned
++--> Shipment Started
++--> Shipment Delivered
++--> Logistics Failure
++--> Webhook Processing Failure
+|
+v
+Notification Service
+|
+v
+Determine Recipient User
+|
+v
+Determine Actor User nếu có
+|
+v
+Create Notification
+|
+v
+Store Notification
+|
+v
+User Opens Notification Center
+|
+v
+Load Notifications
+|
+v
+User Reads Notification
+|
+v
+Update is_read
+
+Notification phục vụ communication/UI.
+
+Notification không thay thế:
+
+- credit_transactions
+- wallet_transactions
+- logistics_webhook_logs
+- audit records
+
+# ============================================================
+
+## 28. NOTIFICATION DATA FLOW
+
+# ============================================================
+
+Business Module
+|
+v
+Notification Service
+|
+v
+notifications
+|
++--> user_id
+|   Recipient user
+|
++--> actor_user_id
+|   User thực hiện action
+|   NULL nếu notification được tạo tự động bởi hệ thống
+|
++--> type
++--> title
++--> message
++--> entity_type
++--> entity_id
++--> is_read
++--> created_at
+|
+v
+Frontend Notification Center
+
+`user_id` xác định người nhận notification.
+
+`actor_user_id` xác định user thực hiện hành động gây ra
+notification.
+
+Nếu notification được tạo bởi system event và không có user actor,
+`actor_user_id = NULL`.
+
+# ============================================================
+
+## 29. COMPANY CREDIT LIMIT FLOW
+
+# ============================================================
+
+Super Admin
+|
+v
+Assign / Update Credit Limit
+|
+v
+Begin Transaction
+|
+v
+Update:
+
+companies.credit_limit
+|
+v
+Update:
+
+companies.remaining_credit
+|
+v
+Create credit_transaction
+|
+type = credit_limit_assigned
+|
+v
+Save balance_after
+|
+v
+Commit
+|
+v
+Create Notification if required
+
+Mọi thay đổi credit quan trọng phải có ledger record.
+
+# ============================================================
+
+## 30. CREDIT TRANSACTION FLOW
+
+# ============================================================
+
+Credit Event
+|
++--> credit_limit_assigned
+|
++--> credit_reserved
+|
++--> credit_released
+|
++--> debt_payment
+|
++--> adjustment
+|
+v
+Begin Transaction
+|
+v
+Lock Company
+|
+v
+Update:
+
+companies.remaining_credit
+|
+v
+Create credit_transaction
+|
+v
+Save balance_after
+|
+v
+Commit
+|
+v
+Create Notification if required
+
+Không được thay đổi `remaining_credit`
+mà không tạo corresponding `credit_transaction`.
+
+# ============================================================
+
+## 31. WALLET TRANSACTION FLOW
+
+# ============================================================
+
+Wallet Event
+|
++--> overpayment
+|
++--> wallet_payment
+|
++--> refund
+|
++--> adjustment
+|
+v
+Begin Transaction
+|
+v
+Lock Company
+|
+v
+Update:
+
+companies.wallet_balance
+|
+v
+Create wallet_transactions
+|
+v
+Save balance_after
+|
+v
+Commit
+|
+v
+Create Notification if required
+
+Không được thay đổi `wallet_balance`
+mà không tạo corresponding `wallet_transaction`.
+
+# ============================================================
+
+## 32. PRODUCT MANAGEMENT FLOW
+
+# ============================================================
+
+Admin
+|
+v
+Create Category
+|
+v
+Create Product
+|
++--> name
++--> description
++--> MOQ
++--> thumbnail
+|
+v
+Create Product Variant
+|
++--> SKU
++--> title
++--> stock
++--> CBM
++--> weight
++--> base_price
+|
+v
+Upload Variant Images
+|
+v
+Create Pricing Tiers
+|
+v
+Activate Product / Variant
+|
+v
+Product becomes available
+for customer ordering
+
+# ============================================================
+
+## 33. PRODUCT IMAGE FLOW
+
+# ============================================================
+
+Product
+|
+v
+thumbnail
+|
+v
+Primary Product Image
+
+Product Variant
+|
+v
+product_variant_images
+|
++--> image_url
++--> sort_order
+|
+v
+Variant Gallery
+
+Product thumbnail và variant images phục vụ UI/catalog.
+
+# ============================================================
+
+## 34. PRODUCT UPDATE FLOW
+
+# ============================================================
+
+Admin
+|
+v
+Edit Product / Variant
+|
++--> name
++--> description
++--> thumbnail
++--> SKU
++--> stock
++--> CBM
++--> weight
++--> base_price
+|
+v
+Update Catalog
+|
+v
+Future Orders Use New Values
+|
+v
+Existing order_items Remain Unchanged
+|
+v
+Because order_items contain snapshots
+
+# ============================================================
+
+## 35. PRICING TIER MANAGEMENT FLOW
+
+# ============================================================
+
+Admin
+|
+v
+Create / Update Pricing Tier
+|
+v
+Validate:
+|
++--> variant exists
++--> quantity range valid
++--> no overlapping ranges
++--> discount valid
+|
+v
+Save Pricing Tier
+|
+v
+Future Orders Use New Pricing
+|
+v
+Existing Orders Remain Unchanged
+
+Pricing tier hiện tại không được dùng để tính lại
+order đã được chốt.
+
+# ============================================================
+
+## 36. STOCK FLOW
+
+# ============================================================
+
+Product Variant
+|
+v
+stock
+|
+v
+Customer Requests Quantity
+|
+v
+Validate Requested Quantity
+|
++---- quantity > stock ----> Reject
+|
+v
+Continue Order Creation
+
+Nếu nghiệp vụ yêu cầu cập nhật stock:
+
+Order Transaction
+|
+v
+Re-check stock
+|
+v
+Apply Stock Business Rule
+|
+v
+Update stock
+
+Việc cập nhật stock phải đảm bảo concurrency safety nếu stock
+được sử dụng để giới hạn số lượng đặt hàng.
+
+NOTE:
+
+Hệ thống KHÔNG triển khai Warehouse Management.
+
+Không bao gồm:
+
+- Warehouse.
+- Bin / Location.
+- Warehouse receipt.
+- Warehouse issue.
+- Stock transfer.
+- Inventory movement ledger.
+- Batch / Lot.
+- Expiry management.
+- Inventory counting.
+
+# ============================================================
+
+## 37. USER MANAGEMENT FLOW
+
+# ============================================================
+
+Admin / Super Admin
+|
+v
+Create User
+|
+v
+Set:
+|
++--> email
++--> password hash
++--> full_name
++--> status
++--> company_id nếu external user
+|
+v
+Assign Role
+|
+v
+User Login
+|
+v
+Load Roles
+|
+v
+Load Permissions
+|
+v
+Authorize Actions
+
+Internal User:
+
+company_id = NULL
+
+External User:
+
+company_id = assigned company
+
+# ============================================================
+
+## 38. COMPANY DATA ISOLATION FLOW
+
+# ============================================================
+
+External User
+|
+v
+Authenticated User
+|
+v
+Identify user.company_id
+|
+v
+Request Company Data
+|
+v
+Apply company_id scope
+|
+v
+Query Database
+|
+v
+Return Only Own Company Data
+
+Ví dụ:
+
+User thuộc Company A:
+
+Allowed:
+
+- Company A orders
+- Company A payments
+- Company A credit
+- Company A wallet
+- Company A users nếu được cấp permission
+
+Denied:
+
+- Company B orders
+- Company B payments
+- Company B credit
+- Company B wallet
+
+Internal users được truy cập dữ liệu dựa trên role/permission.
+
+# ============================================================
+
+## 39. COMPLETE ORDER LIFECYCLE
+
+# ============================================================
+
+Customer
+|
+v
+Create Order
+|
+v
+pending
+|
+v
+Admin Approval
+|
++--------------------------+
+|                          |
+v                          v
+approved                   cancelled
+|                          |
+v                          +--> End
+Logistics Integration
+|
++---- Success ----> Logistics Created
+|                         |
+|                         v
+|                      shipping
+|                         |
+|                         v
+|                      delivered
+|
++---- Failure ----> approved_local
+                          |
+                          v
+                    Retry Integration
+                          |
+                          v
+                    Logistics Created
+                          |
+                          v
+                       shipping
+                          |
+                          v
+                       delivered
+
+Payment lifecycle runs independently:
+
+unpaid
+|
++--> partial
+|
+v
+paid
+
+# ============================================================
+
+## 40. COMPLETE PAYMENT LIFECYCLE
+
+# ============================================================
+
+Customer
+|
+v
+Create Payment Declaration
+|
+v
+Payment
+|
+v
+pending
+|
++--------------------------+
+|                          |
+v                          v
+approved                   rejected
+|                          |
+v                          v
+Payment Allocation         Save Rejection
+|
+v
+Allocate to Order(s)
+|
+v
+Update order.payment_status
+|
+v
+Remaining Amount?
+|
++---- YES ----> Wallet / Overpayment
+|
++---- NO -----> End
+
+# ============================================================
+
+## 41. COMPLETE CREDIT LIFECYCLE
+
+# ============================================================
+
+Super Admin
+|
+v
+Assign Credit Limit
+|
+v
+credit_limit increases
+|
+v
+remaining_credit increases
+|
+v
+Customer creates credit order
+|
+v
+Check remaining_credit
+|
+v
+credit_reserved
+|
+v
+remaining_credit decreases
+|
++-----------------------------+
+|                             |
+v                             v
+Debt Payment                  Order Cancelled
+|                             |
+v                             v
+debt_payment                  credit_released
+|                             |
+v                             v
+remaining_credit increases    remaining_credit increases
+|
+v
+Order payment_status updated
+
+Credit reservation và credit repayment là hai nghiệp vụ
+khác nhau.
+
+# ============================================================
+
+## 42. COMPLETE WALLET LIFECYCLE
+
+# ============================================================
+
+Bank Payment
+|
+v
+Payment Approved
+|
+v
+Allocate Payment to Orders
+|
+v
+Excess Amount?
+|
++---- NO ----> End
+|
+v
+YES
+|
+v
+Create wallet_transaction
+|
+type = overpayment
+|
+v
+Increase wallet_balance
+|
+v
+Future Eligible Financial Operation
+|
+v
+Use Wallet
+|
+v
+Create wallet_transaction
+|
+type = wallet_payment
+|
+v
+Decrease wallet_balance
+
+# ============================================================
+
+## 43. LOGISTICS ASSIGNMENT FLOW
+
+# ============================================================
+
+Approved Order
+|
+v
+Read Order Requirements
+|
++--> total_cbm
++--> total_weight nếu có
+|
+v
+Load Truck Types
+|
+v
+Check Capacity
+|
++--> max_cbm
++--> max_weight_kg
+|
+v
+Select Truck Type
+|
+v
+Select Shipping Carrier
+|
+v
+Create Logistics
+|
+v
+Assign:
+|
++--> carrier
++--> truck_type
++--> truck_plate
++--> driver_name
+|
+v
+Request Shipment
+|
++---- Success ----> tracking_number
+|
+v
+delivery_status = assigned
+|
+v
+Wait for Carrier Event
+
+# ============================================================
+
+## 44. LOGISTICS WEBHOOK -> ORDER FLOW
+
+# ============================================================
+
+Shipping Carrier
+|
+v
+Webhook
+|
+v
+Save Raw Payload
+|
+v
+Create Webhook Log
+|
+v
+Validate Signature / Provider
+|
+v
+Check Idempotency
+|
+v
+Identify Logistics
+|
+v
+Process Event
+|
++---- SHIPPED ----> logistics = in_transit
+|
++---- DELIVERED --> logistics = completed
+|
++---- FAILED ----> Handle Shipment Failure
+|
+v
+Check Order Logistics
+|
++---- Some incomplete ----> Order remains shipping
+|
+v
+All completed
+|
+v
+Order = delivered
+|
+v
+Create Notification
+
+# ============================================================
+
+## 45. TRANSACTION BOUNDARIES
+
+# ============================================================
+
+Các nghiệp vụ tài chính và nghiệp vụ có nhiều thay đổi dữ liệu
+phụ thuộc lẫn nhau phải được xử lý trong database transaction.
+
+### 45.1. CREATE ORDER
+
+Transaction:
+
+1. Validate business conditions.
+2. Lock / re-check company nếu sử dụng credit.
+3. Calculate / confirm pricing.
+4. Create order.
+5. Create order_items snapshots.
+6. Reserve credit nếu `payment_method = credit`.
+7. Create credit_transaction nếu cần.
+8. Commit.
+
+Nếu thất bại:
+
+ROLLBACK.
+
+---
+
+### 45.2. APPROVE PAYMENT
+
+Transaction:
+
+1. Verify payment.
+2. Update payment status.
+3. Create order_payments.
+4. Update order.payment_status.
+5. Update wallet nếu có overpayment.
+6. Update credit nếu payment dùng để trả công nợ.
+7. Create ledger records.
+8. Commit.
+
+Nếu thất bại:
+
+ROLLBACK.
+
+---
+
+### 45.3. CANCEL ORDER
+
+Transaction:
+
+1. Validate cancellation.
+2. Update order status.
+3. Release reserved credit nếu có.
+4. Create credit_transaction.
+5. Update related financial state.
+6. Commit.
+
+---
+
+### 45.4. WALLET USAGE
+
+Transaction:
+
+1. Lock company.
+2. Re-check wallet balance.
+3. Deduct wallet.
+4. Create wallet_transaction.
+5. Allocate financial amount nếu cần.
+6. Update order.payment_status nếu liên quan.
+7. Commit.
+
+---
+
+### 45.5. LOGISTICS COMPLETION
+
+Transaction:
+
+1. Validate webhook.
+2. Check idempotency.
+3. Update logistics status.
+4. Update order status nếu toàn bộ logistics completed.
+5. Mark webhook processed.
+6. Commit.
+
+# ============================================================
+
+## 46. IMPORTANT BUSINESS INVARIANTS
+
+# ============================================================
+
+1. `remaining_credit` không được nhỏ hơn 0.
+
+2. `wallet_balance` không được nhỏ hơn 0.
+
+3. `order_items` phải lưu snapshot dữ liệu tại thời điểm order
+   được chốt.
+
+4. Thay đổi product/product_variant không được làm thay đổi
+   lịch sử `order_items`.
+
+5. Một order có thể có nhiều logistics.
+
+6. Một payment có thể phân bổ cho nhiều orders.
+
+7. Một order có thể nhận tiền từ nhiều payments.
+
+8. `order.payment_status` độc lập với `order.status`.
+
+9. Mọi biến động `remaining_credit` phải có
+   `credit_transaction`.
+
+10. Mọi biến động `wallet_balance` phải có
+    `wallet_transaction`.
+
+11. Balance update và ledger record phải nằm trong cùng
+    database transaction.
+
+12. Không được đánh dấu order = `delivered` nếu còn logistics
+    chưa `completed`.
+
+13. Raw webhook payload phải được lưu trước khi xử lý nghiệp vụ.
+
+14. Webhook phải có cơ chế retry.
+
+15. Webhook processing phải có cơ chế chống duplicate processing.
+
+16. User `suspended` không được thực hiện nghiệp vụ yêu cầu
+    authentication/authorization.
+
+17. Permission phải được kiểm tra ở backend.
+
+18. External user chỉ được truy cập dữ liệu thuộc company của mình.
+
+19. Product variant phải có SKU duy nhất.
+
+20. Pricing tier của cùng một variant không được có khoảng
+    quantity chồng lấn.
+
+21. Quantity của order item phải đáp ứng MOQ của product.
+
+22. Truck type capacity phải được lấy từ database, không
+    hard-code trong business logic.
+
+23. Không được sử dụng catalog hiện tại để tính lại giá của
+    order cũ.
+
+24. `approved_local` chỉ đại diện cho trạng thái order đã được
+    internal approval nhưng logistics/carrier integration chưa
+    hoàn tất.
+
+25. `stock` không được được hiểu là Warehouse Management System.
+
+26. Notification phải xác định đúng recipient thông qua
+    `user_id`.
+
+27. `actor_user_id` phải là NULL đối với notification được tạo
+    tự động bởi system event không phát sinh từ một user.
+
+28. Notification không được dùng làm financial ledger hoặc
+    audit record.
+
+# ============================================================
+
+## 47. END-TO-END B2B ORDER EXAMPLE
+
+# ============================================================
+
+Company A
+|
+v
+User A Login
+|
+v
+Browse Product Catalog
+|
+v
+Open "Gạo ST25"
+|
+v
+Select Variant "25kg/thùng"
+|
+v
+Quantity = 50
+|
+v
+Validate MOQ
+|
+v
+Find Pricing Tier
+|
+v
+50+ => 10% discount
+|
+v
+Calculate Price
+|
+v
+Calculate Order Total
+|
+v
+Select payment_method = credit
+|
+v
+Check remaining_credit
+|
++---- Insufficient ----> Reject
+|
+v
+Sufficient
+|
+v
+Begin Transaction
+|
+v
+Create Order #1001
+|
++--> order_items snapshot
+|
++--> credit_reserved
+|
+v
+Commit
+|
+v
+Order #1001 = pending
+|
+v
+Admin Approves
+|
+v
+Order #1001 = approved
+|
+v
+Create Logistics #5001
+|
++--> Carrier
++--> Truck Type
++--> planned_cbm
+|
+v
+Carrier accepts shipment
+|
+v
+Logistics #5001 = in_transit
+|
+v
+Order #1001 = shipping
+|
+v
+Carrier sends DELIVERED webhook
+|
+v
+Save raw webhook
+|
+v
+Create webhook log
+|
+v
+Process webhook
+|
+v
+Logistics #5001 = completed
+|
+v
+Check all logistics
+|
+v
+All completed
+|
+v
+Order #1001 = delivered
+|
+v
+Customer receives notification
+|
+v
+Company pays outstanding credit debt
+|
+v
+Payment declaration
+|
+v
+Payment = pending
+|
+v
+Accountant verifies payment
+|
+v
+Payment = approved
+|
+v
+Allocate payment to Order #1001
+|
+v
+Create credit_transaction
+|
+type = debt_payment
+|
+v
+Increase remaining_credit
+|
+v
+Order payment_status = paid
+|
+v
+Create Notification
+
+# ============================================================
+
+## 48. COMPLETE SYSTEM ACTIVITY FLOW
+
+# ============================================================
+
+                         USER
+                          |
+                          v
+                  +---------------+
+                  | Authentication|
+                  +-------+-------+
+                          |
+                          v
+                        RBAC
+                          |
+             +------------+------------+
+             |                         |
+             v                         v
+       PRODUCT CATALOG              ORDER
+             |                         |
+             v                         v
+          VARIANT                  VALIDATION
+             |                         |
+             v                         v
+          PRICING                PAYMENT METHOD
+                                       |
+                       +---------------+---------------+
+                       |                               |
+                       v                               v
+                    CREDIT                      BANK TRANSFER
+                       |                               |
+                       v                               v
+                RESERVE CREDIT                PAYMENT DECLARATION
+                       |                               |
+                       |                               v
+                       |                         ACCOUNTANT
+                       |                               |
+                       |                               v
+                       |                         PAYMENT APPROVAL
+                       |                               |
+                       |                               v
+                       |                         PAYMENT ALLOCATION
+                       |                               |
+                       +---------------+---------------+
+                                       |
+                                       v
+                                ORDER APPROVAL
+                                       |
+                                       v
+                              LOGISTICS PLANNING
+                                       |
+                                       v
+                              CARRIER ASSIGNMENT
+                                       |
+                                       v
+                                  SHIPMENT
+                                       |
+                                       v
+                                   WEBHOOK
+                                       |
+                                       v
+                              DELIVERY STATUS
+                                       |
+                                       v
+                                  DELIVERED
+                                       |
+                                       v
+                              PAYMENT RECONCILIATION
+                                       |
+                                       v
+                               CREDIT / WALLET
+                                       |
+                                       v
+                                FINANCIAL LEDGER
+                                       |
+                                       v
+                                  NOTIFICATION
+
+# ============================================================
+
+## 49. SYSTEM DATA FLOW SUMMARY
+
+# ============================================================
+
+EXTERNAL USER
+|
++----> AUTHENTICATION
+|
++----> PRODUCT CATALOG
+|      |
+|      +----> CATEGORIES
+|      +----> PRODUCTS
+|      +----> PRODUCT VARIANTS
+|      +----> PRODUCT IMAGES
+|      +----> PRICING TIERS
+|
++----> ORDERS
+|      |
+|      +----> ORDER ITEMS
+|      +----> CREDIT
+|      +----> PAYMENTS
+|      +----> WALLET
+|      +----> LOGISTICS
+|
++----> NOTIFICATIONS
+       |
+       +----> recipient user
+       +----> actor user nếu có
+
+INTERNAL USER
+|
++----> USERS
++----> COMPANIES
++----> PRODUCTS
++----> PRICING
++----> ORDERS
++----> PAYMENTS
++----> CREDIT
++----> WALLET
++----> LOGISTICS
++----> CARRIERS
++----> TRUCK TYPES
++----> WEBHOOK LOGS
++----> NOTIFICATIONS
+|
+v
+RBAC
+|
++----> ROLES
++----> PERMISSIONS
+
+SHIPPING CARRIER
+|
++----> API
+|
++----> WEBHOOK
+|
+v
+LOGISTICS WEBHOOK LOGS
+|
+v
+LOGISTICS
+|
+v
+ORDER
+
+# ============================================================
+
+## 50. FINAL BUSINESS FLOW
+
+# ============================================================
+
+Company
+|
+v
+User Login
+|
+v
+Authentication
+|
+v
+RBAC Authorization
+|
+v
+Browse Product Catalog
+|
+v
+Select Product Variant
+|
+v
+Calculate Tiered Pricing
+|
+v
+Create Order
+|
+v
+Choose Payment Method
+|
++-----------------------------+
+|                             |
+v                             v
+Credit                        Bank Transfer
+|                             |
+v                             v
+Reserve Credit                Payment Declaration
+|                             |
+|                             v
+|                        Accountant Approval
+|                             |
+|                             v
+|                        Payment Allocation
+|                             |
++--------------+--------------+
+               |
+               v
+        Order Approval
+               |
+       +-------+-------+
+       |               |
+       v               v
+   approved       approved_local
+       |               |
+       +-------+-------+
+               |
+               v
+      Logistics Assignment
+               |
+               v
+      Carrier Integration
+               |
+               v
+            Shipment
+               |
+               v
+            Webhook
+               |
+               v
+      Delivery Processing
+               |
+               v
+      All Logistics Completed
+               |
+               v
+         Order Delivered
+               |
+               v
+      Payment Reconciliation
+               |
+               v
+         Credit / Wallet
+               |
+               v
+       Financial Ledger
+               |
+               v
+          Notification
+
+# ============================================================
+
+## 51. SYSTEM CORE PRINCIPLES
+
+# ============================================================
+
+### COMMERCE
+
+Product
+|
+v
+Variant
+|
+v
+Pricing Tier
+|
+v
+Order
+|
+v
+Order Item Snapshot
+
+---
+
+### FINANCIAL
+
+Payment
+|
++--> Order Payment Allocation
+|
++--> Credit
+|
++--> Wallet
+|
+v
+Financial Ledger
+
+---
+
+### LOGISTICS
+
+Order
+|
+v
+Logistics
+|
++--> Carrier
++--> Truck Type
+|
+v
+Shipment
+|
+v
+Webhook
+|
+v
+Delivery
+
+---
+
+### SECURITY
+
+Request
+|
+v
+Authentication
+|
+v
+User Status
+|
+v
+Permission
+|
+v
+Company Scope / Ownership
+|
+v
+Business Rules
+|
+v
+Database
+
+---
+
+### NOTIFICATION
+
+Business Event
+|
+v
+Notification Service
+|
+v
+Notification
+|
++--> recipient (`user_id`)
++--> actor (`actor_user_id`) nếu có
++--> type
++--> entity reference
+|
+v
+Notification Center
+
+Notification chỉ phục vụ communication/UI.
+
+---
+
+### AUDITABILITY
+
+Financial Change
+|
++--> Credit Transaction
+|
++--> Wallet Transaction
+
+Carrier Callback
+|
++--> Logistics Webhook Log
+
+Order History
+|
++--> Order Item Snapshot
+
+Business Notification
+|
++--> Notification
+
+# ============================================================
+
+## END OF FILE 4 — ACTIVITY FLOW
+
+# ============================================================

@@ -1,0 +1,1553 @@
+// ============================================================
+// B2B LOGISTICS SYSTEM
+// Node.js + Express.js + LiquidJS + PostgreSQL
+// ============================================================
+
+
+// ============================================================
+// 1. ENUMS
+// ============================================================
+
+
+// Trạng thái của các entity có thể bị tạm dừng.
+// Được dùng cho users, shipping_carriers, truck_types...
+Enum entity_status {
+  active    [note: "Entity đang hoạt động"]
+  suspended [note: "Entity đang tạm ngưng hoạt động"]
+}
+
+
+// Vòng đời của một đơn hàng.
+Enum order_status {
+  pending        [note: "Đơn vừa được tạo, đang chờ xử lý/phê duyệt"]
+  approved       [note: "Đơn đã được hệ thống/admin phê duyệt đầy đủ"]
+  approved_local [note: "Đơn đã được hệ thống nội bộ duyệt nhưng chưa đồng bộ thành công với nhà vận chuyển"]
+  shipping       [note: "Đơn đang trong quá trình vận chuyển"]
+  delivered      [note: "Đơn đã giao hàng thành công"]
+  cancelled      [note: "Đơn đã bị hủy"]
+}
+
+
+// Phương thức thanh toán mà doanh nghiệp lựa chọn khi đặt hàng.
+Enum payment_method_type {
+  credit        [note: "Mua hàng theo hạn mức công nợ được cấp"]
+  bank_transfer [note: "Thanh toán bằng chuyển khoản ngân hàng"]
+}
+
+
+// Trạng thái thanh toán tổng thể của một đơn hàng.
+// Tách riêng khỏi order_status vì vòng đời đơn và dòng tiền là hai vấn đề khác nhau.
+Enum order_payment_status {
+  unpaid  [note: "Đơn chưa được thanh toán"]
+  partial [note: "Đơn mới được thanh toán một phần, vẫn còn công nợ"]
+  paid    [note: "Đơn đã được thanh toán đủ"]
+}
+
+
+// Trạng thái của một khoản tiền thực tế được khai báo/chuyển khoản.
+Enum payment_status_type {
+  pending  [note: "Đại lý báo đã chuyển khoản, đang chờ kế toán kiểm tra tài khoản ngân hàng"]
+  approved [note: "Kế toán đã xác nhận tiền thực tế đã về tài khoản"]
+  rejected [note: "Khoản thanh toán bị từ chối do không tìm thấy giao dịch hoặc thông tin không hợp lệ"]
+}
+
+
+// Loại biến động hạn mức công nợ.
+Enum credit_transaction_type {
+  credit_limit_assigned [note: "Quản lý cấp hoặc điều chỉnh hạn mức công nợ cho doanh nghiệp"]
+  credit_reserved       [note: "Đơn hàng trả sau được chốt và giữ lại một phần hạn mức công nợ"]
+  credit_released       [note: "Đơn hàng bị hủy nên phần hạn mức đã giữ được trả lại"]
+  debt_payment          [note: "Khoản thanh toán được dùng để giảm công nợ"]
+  adjustment            [note: "Kế toán/quản trị viên điều chỉnh công nợ thủ công"]
+}
+
+
+// Loại biến động số dư tiền dư/tiền ứng trước.
+Enum wallet_transaction_type {
+  overpayment    [note: "Khoản tiền thanh toán vượt số tiền cần cấn trừ"]
+  wallet_payment [note: "Sử dụng tiền trong wallet để thanh toán đơn hàng"]
+  refund         [note: "Hoàn tiền cho doanh nghiệp"]
+  adjustment     [note: "Kế toán điều chỉnh số dư wallet thủ công"]
+}
+
+
+// Cách tính discount của pricing tier.
+// Hiện tại hệ thống chỉ hỗ trợ giảm theo phần trăm.
+Enum pricing_tier_type {
+  percentage_discount [note: "Giảm giá theo phần trăm trên giá gốc"]
+}
+
+
+// Các phân khúc xe được hệ thống hỗ trợ.
+Enum truck_type_size {
+  van_500kg   [note: "Xe van 500kg, sức chứa tối đa khoảng 2.5 CBM"]
+  small_1_5t  [note: "Xe tải nhỏ 1.5 tấn, sức chứa tối đa khoảng 8 CBM"]
+  medium_2_5t [note: "Xe tải trung 2.5 tấn, sức chứa tối đa khoảng 14 CBM"]
+  large_5t    [note: "Xe tải lớn 5 tấn, sức chứa tối đa khoảng 24 CBM"]
+  heavy_15t   [note: "Xe tải nặng 15 tấn, sức chứa tối đa khoảng 60 CBM"]
+}
+
+
+// Trạng thái của từng chuyến giao hàng.
+Enum delivery_status_type {
+  assigned   [note: "Đã phân công nhà xe/xe/tài xế nhưng chưa bắt đầu chạy"]
+  in_transit [note: "Xe đã bắt đầu vận chuyển"]
+  completed  [note: "Chuyến xe đã giao hàng hoàn tất"]
+}
+
+
+// Trạng thái xử lý webhook từ nhà vận chuyển.
+Enum webhook_status_type {
+  received  [note: "Webhook đã nhận nhưng chưa xử lý"]
+  processed [note: "Webhook đã được xử lý thành công"]
+  failed    [note: "Webhook xử lý thất bại, cần kiểm tra hoặc retry"]
+}
+
+
+// ============================================================
+// NOTIFICATIONS ENUMS
+// ============================================================
+
+
+// Loại notification.
+// Dùng để frontend biết notification thuộc nhóm nghiệp vụ nào
+// và quyết định icon, màu sắc hoặc hành động khi click.
+Enum notification_type {
+  order_created          [note: "Có đơn hàng mới được tạo"]
+  order_approved         [note: "Đơn hàng đã được phê duyệt"]
+  order_cancelled        [note: "Đơn hàng đã bị hủy"]
+  order_shipping         [note: "Đơn hàng bắt đầu được vận chuyển"]
+  order_delivered        [note: "Đơn hàng đã giao thành công"]
+
+  payment_submitted      [note: "Có khoản thanh toán mới được khai báo"]
+  payment_approved       [note: "Khoản thanh toán đã được xác nhận"]
+  payment_rejected       [note: "Khoản thanh toán bị từ chối"]
+
+  credit_updated         [note: "Hạn mức công nợ của doanh nghiệp được thay đổi"]
+  wallet_updated         [note: "Số dư wallet của doanh nghiệp được thay đổi"]
+
+  logistics_assigned     [note: "Đơn hàng đã được phân công chuyến vận chuyển"]
+  logistics_in_transit   [note: "Chuyến vận chuyển đã bắt đầu"]
+  logistics_completed    [note: "Chuyến vận chuyển đã hoàn tất"]
+
+  system                 [note: "Thông báo chung từ hệ thống"]
+}
+
+
+// Loại entity mà notification đang tham chiếu tới.
+// reference_id sẽ chứa ID tương ứng của entity.
+Enum notification_reference_type {
+  order
+  payment
+  logistics
+  company
+  credit_transaction
+  wallet_transaction
+  system
+}
+
+
+// ============================================================
+// 2. COMPANIES
+// ============================================================
+
+Table companies {
+  id integer [pk, increment, note: "ID duy nhất của doanh nghiệp/đại lý"]
+
+  name varchar(150) [
+    not null,
+    note: "Tên pháp lý/tên giao dịch của doanh nghiệp mua hàng"
+  ]
+
+  phone varchar(20) [
+    note: "Số điện thoại liên hệ của doanh nghiệp"
+  ]
+
+  credit_limit bigint [
+    not null,
+    default: 0,
+    note: "Hạn mức công nợ tối đa được super_admin cấp cho doanh nghiệp, đơn vị VNĐ"
+  ]
+
+  remaining_credit bigint [
+    not null,
+    default: 0,
+    note: "Hạn mức công nợ hiện còn có thể sử dụng để tạo đơn trả sau, đơn vị VNĐ"
+  ]
+
+  wallet_balance bigint [
+    not null,
+    default: 0,
+    note: "Số tiền dư/tiền ứng trước của doanh nghiệp có thể dùng cho các đơn hàng tiếp theo, đơn vị VNĐ"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo doanh nghiệp"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật thông tin doanh nghiệp gần nhất"
+  ]
+
+  Indexes {
+    name [name: "idx_companies_name"]
+  }
+}
+
+
+// ============================================================
+// 3. USERS
+// ============================================================
+
+Table users {
+  id integer [pk, increment, note: "ID duy nhất của người dùng"]
+
+  company_id integer [
+    note: "Doanh nghiệp mà user thuộc về; NULL nếu đây là user nội bộ của bên bán"
+  ]
+
+  email varchar(255) [
+    unique,
+    not null,
+    note: "Email dùng để đăng nhập hệ thống"
+  ]
+
+  password varchar(255) [
+    not null,
+    note: "Mật khẩu đã được hash, không lưu plaintext"
+  ]
+
+  full_name varchar(150) [
+    not null,
+    note: "Họ tên người dùng"
+  ]
+
+  status entity_status [
+    not null,
+    default: `entity_status::active`,
+    note: "Trạng thái tài khoản dùng để kiểm tra lại khi user đang thao tác"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo tài khoản"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật tài khoản gần nhất"
+  ]
+
+  Indexes {
+    company_id [name: "idx_users_company"]
+    status [name: "idx_users_status"]
+  }
+}
+
+
+// ============================================================
+// REFRESH TOKENS
+// ============================================================
+
+Table refresh_tokens {
+  id bigint [
+    pk,
+    increment,
+    note: "ID duy nhất của refresh token"
+  ]
+
+  user_id integer [
+    not null,
+    note: "User sở hữu refresh token"
+  ]
+
+  token_hash varchar(255) [
+    not null,
+    unique,
+    note: "Hash của refresh token; không lưu raw refresh token"
+  ]
+
+  expires_at timestamp [
+    not null,
+    note: "Thời điểm refresh token hết hạn"
+  ]
+
+  revoked_at timestamp [
+    note: "Thời điểm refresh token bị thu hồi; NULL nếu token vẫn còn hiệu lực"
+  ]
+
+  replaced_by_token_id bigint [
+    note: "ID của refresh token mới thay thế token hiện tại khi thực hiện token rotation"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo refresh token"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật refresh token gần nhất"
+  ]
+
+  Indexes {
+    user_id [
+      name: "idx_refresh_tokens_user"
+    ]
+
+    expires_at [
+      name: "idx_refresh_tokens_expires_at"
+    ]
+
+    revoked_at [
+      name: "idx_refresh_tokens_revoked_at"
+    ]
+
+    (user_id, revoked_at) [
+      name: "idx_refresh_tokens_user_revoked"
+    ]
+  }
+}
+
+
+// ============================================================
+// 4. RBAC
+// ============================================================
+
+Table roles {
+  id integer [pk, increment, note: "ID của role"]
+
+  name varchar(100) [
+    unique,
+    not null,
+    note: "Tên role, ví dụ SUPER_ADMIN, ADMIN, ACCOUNTANT, PURCHASER"
+  ]
+
+  description varchar(255) [
+    note: "Mô tả mục đích của role"
+  ]
+}
+
+
+Table permissions {
+  id integer [pk, increment, note: "ID của permission"]
+
+  code varchar(100) [
+    unique,
+    not null,
+    note: "Mã quyền, ví dụ ORDER_CREATE, ORDER_APPROVE, PAYMENT_APPROVE, CREDIT_UPDATE"
+  ]
+
+  description varchar(255) [
+    note: "Mô tả quyền"
+  ]
+}
+
+
+Table user_roles {
+  user_id integer [
+    not null,
+    note: "User được gán role"
+  ]
+
+  role_id integer [
+    not null,
+    note: "Role được gán cho user"
+  ]
+
+  Indexes {
+    (user_id, role_id) [pk]
+    role_id [name: "idx_user_roles_role"]
+  }
+}
+
+
+Table role_permissions {
+  role_id integer [
+    not null,
+    note: "Role sở hữu permission"
+  ]
+
+  permission_id integer [
+    not null,
+    note: "Permission được cấp cho role"
+  ]
+
+  Indexes {
+    (role_id, permission_id) [pk]
+    permission_id [name: "idx_role_permissions_permission"]
+  }
+}
+
+
+// ============================================================
+// 5. PRODUCT CATALOG
+// ============================================================
+
+Table categories {
+  id integer [
+    pk,
+    increment,
+    note: "ID danh mục sản phẩm"
+  ]
+
+  name varchar(150) [
+    not null,
+    note: "Tên danh mục"
+  ]
+
+  slug varchar(150) [
+    unique,
+    not null,
+    note: "Slug dùng cho URL"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo danh mục"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật danh mục"
+  ]
+}
+
+
+Table products {
+  id integer [
+    pk,
+    increment,
+    note: "ID sản phẩm cha"
+  ]
+
+  category_id integer [
+    not null,
+    note: "Danh mục mà sản phẩm thuộc về"
+  ]
+
+  name varchar(200) [
+    not null,
+    note: "Tên sản phẩm, ví dụ Gạo ST25"
+  ]
+
+  thumbnail varchar(500) [
+    note: "URL ảnh đại diện chính của sản phẩm"
+  ]
+
+  description text [
+    note: "Mô tả sản phẩm"
+  ]
+
+  moq integer [
+    not null,
+    default: 1,
+    note: "Minimum Order Quantity - số lượng thùng tối thiểu được phép đặt cho sản phẩm"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo sản phẩm"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật sản phẩm"
+  ]
+
+  Indexes {
+    category_id [name: "idx_products_category"]
+  }
+}
+
+
+Table product_variants {
+  id integer [
+    pk,
+    increment,
+    note: "ID của biến thể sản phẩm"
+  ]
+
+  product_id integer [
+    not null,
+    note: "Sản phẩm cha mà variant thuộc về"
+  ]
+
+  sku varchar(100) [
+    unique,
+    not null,
+    note: "SKU duy nhất dùng để định danh variant"
+  ]
+
+  title varchar(150) [
+    not null,
+    note: "Tên biến thể, ví dụ 25kg/thùng"
+  ]
+
+  stock integer [
+    not null,
+    default: 0,
+    note: "Tồn kho hiện tại, tính theo số thùng"
+  ]
+
+  cbm_per_box decimal(10,4) [
+    not null,
+    note: "Thể tích của một thùng, đơn vị CBM"
+  ]
+
+  weight_per_box decimal(10,2) [
+    not null,
+    note: "Khối lượng của một thùng, đơn vị kg"
+  ]
+
+  base_price bigint [
+    not null,
+    note: "Giá gốc hiện tại của một thùng, đơn vị VNĐ"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo variant"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật variant"
+  ]
+
+  Indexes {
+    product_id [name: "idx_variants_product"]
+  }
+}
+
+
+Table product_variant_images {
+  id integer [
+    pk,
+    increment,
+    note: "ID ảnh"
+  ]
+
+  product_variant_id integer [
+    not null,
+    note: "Variant sở hữu ảnh"
+  ]
+
+  image_url varchar(500) [
+    not null,
+    note: "URL hoặc path của ảnh"
+  ]
+
+  sort_order integer [
+    not null,
+    default: 0,
+    note: "Thứ tự hiển thị ảnh"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm thêm ảnh"
+  ]
+
+  Indexes {
+    product_variant_id [name: "idx_variant_images_variant"]
+
+    (product_variant_id, sort_order) [
+      name: "idx_variant_images_sort"
+    ]
+  }
+}
+
+
+// ============================================================
+// 6. TIERED PRICING
+// ============================================================
+
+Table pricing_tiers {
+  id integer [
+    pk,
+    increment,
+    note: "ID của pricing tier"
+  ]
+
+  product_variant_id integer [
+    not null,
+    note: "Variant được áp dụng mức giá này"
+  ]
+
+  min_quantity integer [
+    not null,
+    note: "Số lượng thùng tối thiểu để đạt tier"
+  ]
+
+  max_quantity integer [
+    note: "Số lượng thùng tối đa của tier; NULL nghĩa là không giới hạn"
+  ]
+
+  discount_type pricing_tier_type [
+    not null,
+    default: `pricing_tier_type::percentage_discount`,
+    note: "Kiểu chiết khấu"
+  ]
+
+  discount_percent decimal(5,2) [
+    not null,
+    default: 0,
+    note: "Phần trăm giảm giá áp dụng cho tier"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo tier"
+  ]
+
+  Indexes {
+    product_variant_id [name: "idx_pricing_tiers_variant"]
+
+    (product_variant_id, min_quantity) [
+      name: "idx_pricing_tiers_variant_min_quantity"
+    ]
+  }
+}
+
+
+// ============================================================
+// 7. ORDERS
+// ============================================================
+
+Table orders {
+  id integer [
+    pk,
+    increment,
+    note: "ID đơn hàng"
+  ]
+
+  company_id integer [
+    not null,
+    note: "Doanh nghiệp mua hàng sở hữu đơn hàng"
+  ]
+
+  user_id integer [
+    not null,
+    note: "User của doanh nghiệp đã tạo đơn"
+  ]
+
+  total_price bigint [
+    not null,
+    note: "Tổng giá trị cuối cùng của đơn hàng, đơn vị VNĐ"
+  ]
+
+  total_cbm decimal(12,4) [
+    not null,
+    note: "Tổng thể tích của toàn bộ hàng trong đơn, đơn vị CBM"
+  ]
+
+  total_weight decimal(12,4) [
+    not null,
+    note: "Tổng trọng lượng của toàn bộ hàng trong đơn, đơn vị kg"
+  ]
+
+  payment_method payment_method_type [
+    not null,
+    note: "Phương thức thanh toán được chọn khi tạo đơn"
+  ]
+
+  status order_status [
+    not null,
+    default: `order_status::pending`,
+    note: "Trạng thái vòng đời của đơn hàng"
+  ]
+
+  payment_status order_payment_status [
+    not null,
+    default: `order_payment_status::unpaid`,
+    note: "Trạng thái thanh toán của đơn, độc lập với lifecycle của order"
+  ]
+
+  approved_at timestamp [
+    note: "Thời điểm user nội bộ phê duyệt đơn"
+  ]
+
+  approved_by integer [
+    note: "User nội bộ đã phê duyệt đơn"
+  ]
+
+  cancelled_at timestamp [
+    note: "Thời điểm đơn bị hủy"
+  ]
+
+  cancelled_by integer [
+    note: "User đã thực hiện hủy đơn"
+  ]
+
+  cancellation_reason varchar(500) [
+    note: "Lý do hủy đơn"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo đơn"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật đơn gần nhất"
+  ]
+
+  Indexes {
+    company_id [name: "idx_orders_company"]
+    user_id [name: "idx_orders_user"]
+    status [name: "idx_orders_status"]
+    payment_status [name: "idx_orders_payment_status"]
+    created_at [name: "idx_orders_created_at"]
+  }
+}
+
+
+// ============================================================
+// 8. ORDER ITEMS
+// ============================================================
+
+Table order_items {
+  id integer [
+    pk,
+    increment,
+    note: "ID dòng sản phẩm trong đơn hàng"
+  ]
+
+  order_id integer [
+    not null,
+    note: "Đơn hàng chứa dòng sản phẩm này"
+  ]
+
+  variant_id integer [
+    not null,
+    note: "Variant gốc được đặt"
+  ]
+
+  quantity integer [
+    not null,
+    note: "Số lượng thùng khách đặt"
+  ]
+
+  base_price_per_box bigint [
+    not null,
+    note: "Snapshot giá gốc tại thời điểm chốt đơn, đơn vị VNĐ"
+  ]
+
+  discount_percent decimal(5,2) [
+    not null,
+    default: 0,
+    note: "Snapshot phần trăm chiết khấu được áp dụng"
+  ]
+
+  price_per_box bigint [
+    not null,
+    note: "Giá thực tế khách phải trả cho một thùng sau chiết khấu, đơn vị VNĐ"
+  ]
+
+  cbm_per_box decimal(10,4) [
+    not null,
+    note: "Snapshot CBM của một thùng tại thời điểm chốt đơn"
+  ]
+
+  weight_per_box decimal(10,2) [
+    not null,
+    note: "Snapshot trọng lượng của một thùng tại thời điểm chốt đơn"
+  ]
+
+  product_name varchar(200) [
+    not null,
+    note: "Snapshot tên sản phẩm để đảm bảo lịch sử đơn không thay đổi khi catalog sửa tên"
+  ]
+
+  variant_title varchar(150) [
+    not null,
+    note: "Snapshot tên variant"
+  ]
+
+  sku varchar(100) [
+    not null,
+    note: "Snapshot SKU tại thời điểm đặt hàng"
+  ]
+
+  Indexes {
+    order_id [name: "idx_order_items_order"]
+    variant_id [name: "idx_order_items_variant"]
+  }
+}
+
+
+// ============================================================
+// 9. TRUCK TYPES
+// ============================================================
+
+Table truck_types {
+  id integer [
+    pk,
+    increment,
+    note: "ID loại xe"
+  ]
+
+  code truck_type_size [
+    unique,
+    not null,
+    note: "Mã loại xe dùng trong hệ thống"
+  ]
+
+  name varchar(100) [
+    not null,
+    note: "Tên hiển thị của loại xe"
+  ]
+
+  max_weight_kg decimal(10,2) [
+    not null,
+    note: "Tải trọng tối đa của xe, đơn vị kg"
+  ]
+
+  max_cbm decimal(10,4) [
+    not null,
+    note: "Thể tích tối đa xe có thể chở, đơn vị CBM"
+  ]
+
+  status entity_status [
+    not null,
+    default: `entity_status::active`,
+    note: "Cho phép admin tạm ngưng loại xe"
+  ]
+}
+
+
+// ============================================================
+// 10. SHIPPING CARRIERS
+// ============================================================
+
+Table shipping_carriers {
+  id integer [
+    pk,
+    increment,
+    note: "ID nhà vận chuyển"
+  ]
+
+  name varchar(150) [
+    not null,
+    note: "Tên công ty vận tải đối tác"
+  ]
+
+  code varchar(50) [
+    unique,
+    not null,
+    note: "Mã định danh provider dùng khi gọi API"
+  ]
+
+  contact_phone varchar(20) [
+    note: "Hotline liên hệ của nhà vận chuyển"
+  ]
+
+  status entity_status [
+    not null,
+    default: `entity_status::active`,
+    note: "Trạng thái hợp tác với nhà vận chuyển"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm thêm nhà vận chuyển"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật nhà vận chuyển"
+  ]
+}
+
+
+// ============================================================
+// 11. LOGISTICS
+// ============================================================
+
+Table logistics {
+  id integer [
+    pk,
+    increment,
+    note: "ID của một chuyến vận chuyển"
+  ]
+
+  order_id integer [
+    not null,
+    note: "Đơn hàng mà chuyến xe này phục vụ; một order có thể có nhiều logistics"
+  ]
+
+  carrier_id integer [
+    not null,
+    note: "Nhà vận chuyển phụ trách chuyến này"
+  ]
+
+  truck_type_id integer [
+    not null,
+    note: "Loại xe được hệ thống điều phối cho chuyến này"
+  ]
+
+  planned_cbm decimal(12,4) [
+    not null,
+    note: "Tổng thể tích hàng được phân bổ cho chuyến xe này, đơn vị CBM"
+  ]
+
+  planned_weight_kg decimal(12,2) [
+    not null,
+    note: "Tổng khối lượng hàng được phân bổ cho chuyến xe này, đơn vị kg"
+  ]
+
+  tracking_number varchar(100) [
+    note: "Mã vận đơn do nhà vận chuyển cấp"
+  ]
+
+  truck_plate varchar(20) [
+    note: "Biển số xe thực tế"
+  ]
+
+  driver_name varchar(150) [
+    note: "Tên tài xế thực tế"
+  ]
+
+  delivery_status delivery_status_type [
+    not null,
+    default: `delivery_status_type::assigned`,
+    note: "Trạng thái riêng của chuyến vận chuyển"
+  ]
+
+  assigned_at timestamp [
+    note: "Thời điểm chuyến xe được phân công"
+  ]
+
+  started_at timestamp [
+    note: "Thời điểm xe bắt đầu vận chuyển"
+  ]
+
+  completed_at timestamp [
+    note: "Thời điểm chuyến xe hoàn tất"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo bản ghi chuyến"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật chuyến gần nhất"
+  ]
+
+  Indexes {
+    order_id [name: "idx_logistics_order"]
+    carrier_id [name: "idx_logistics_carrier"]
+    truck_type_id [name: "idx_logistics_truck_type"]
+    delivery_status [name: "idx_logistics_delivery_status"]
+    tracking_number [name: "idx_logistics_tracking"]
+  }
+}
+
+
+// ============================================================
+// 12. LOGISTICS ITEMS
+// ============================================================
+
+// Một logistics có thể chỉ chở một phần hàng của order.
+// logistics_items dùng để xác định chính xác những order_item nào
+// được phân bổ vào chuyến xe nào.
+//
+// Ví dụ:
+// Order #100 có:
+//   - Gạo 25kg: 100 thùng
+//   - Dầu ăn: 50 thùng
+//
+// Hệ thống có thể tạo:
+//   Logistics #1:
+//     - Gạo 25kg: 70 thùng
+//     - Dầu ăn: 50 thùng
+//
+//   Logistics #2:
+//     - Gạo 25kg: 30 thùng
+//
+// Điều này cho phép một order được chia thành nhiều chuyến xe
+// và một order_item cũng có thể được chia cho nhiều logistics.
+
+
+Table logistics_items {
+  id integer [
+    pk,
+    increment,
+    note: "ID dòng hàng được phân bổ vào chuyến logistics"
+  ]
+
+  logistics_id integer [
+    not null,
+    note: "Chuyến logistics chứa phần hàng này"
+  ]
+
+  order_item_id integer [
+    not null,
+    note: "Dòng sản phẩm gốc trong order được phân bổ"
+  ]
+
+  quantity integer [
+    not null,
+    note: "Số lượng thùng của order_item được phân bổ vào chuyến này"
+  ]
+
+  planned_cbm decimal(12,4) [
+    not null,
+    note: "Tổng CBM của phần hàng được phân bổ vào chuyến này"
+  ]
+
+  planned_weight_kg decimal(12,2) [
+    not null,
+    note: "Tổng khối lượng của phần hàng được phân bổ vào chuyến này, đơn vị kg"
+  ]
+
+  Indexes {
+    logistics_id [name: "idx_logistics_items_logistics"]
+    order_item_id [name: "idx_logistics_items_order_item"]
+
+    (logistics_id, order_item_id) [
+      unique,
+      name: "uq_logistics_items_logistics_order_item"
+    ]
+  }
+}
+
+
+// ============================================================
+// 13. PAYMENTS
+// ============================================================
+
+Table payments {
+  id integer [
+    pk,
+    increment,
+    note: "ID của khoản thanh toán"
+  ]
+
+  company_id integer [
+    not null,
+    note: "Doanh nghiệp thực hiện thanh toán"
+  ]
+
+  user_id integer [
+    not null,
+    note: "User của doanh nghiệp tạo/báo nhận khoản thanh toán"
+  ]
+
+  amount bigint [
+    not null,
+    note: "Số tiền thực tế chuyển khoản ngân hàng, đơn vị VNĐ"
+  ]
+
+  bank_reference varchar(100) [
+    note: "Mã giao dịch ngân hàng dùng để đối soát"
+  ]
+
+  status payment_status_type [
+    not null,
+    default: `payment_status_type::pending`,
+    note: "Trạng thái xác minh khoản tiền của kế toán"
+  ]
+
+  approved_at timestamp [
+    note: "Thời điểm kế toán duyệt khoản tiền"
+  ]
+
+  approved_by integer [
+    note: "User kế toán/admin đã duyệt khoản tiền"
+  ]
+
+  rejected_at timestamp [
+    note: "Thời điểm khoản tiền bị từ chối"
+  ]
+
+  rejected_by integer [
+    note: "User đã từ chối khoản tiền"
+  ]
+
+  rejection_reason varchar(500) [
+    note: "Lý do từ chối khoản thanh toán"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm tạo bản ghi payment"
+  ]
+
+  updated_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm cập nhật payment"
+  ]
+
+  Indexes {
+    company_id [name: "idx_payments_company"]
+    user_id [name: "idx_payments_user"]
+    status [name: "idx_payments_status"]
+    bank_reference [name: "idx_payments_bank_reference"]
+    created_at [name: "idx_payments_created_at"]
+  }
+}
+
+
+// ============================================================
+// 14. ORDER PAYMENTS
+// ============================================================
+
+Table order_payments {
+  order_id integer [
+    not null,
+    note: "Đơn hàng được cấn trừ tiền"
+  ]
+
+  payment_id integer [
+    not null,
+    note: "Khoản thanh toán được dùng để cấn trừ"
+  ]
+
+  amount_allocated bigint [
+    not null,
+    note: "Số tiền từ payment được phân bổ cho order này, đơn vị VNĐ"
+  ]
+
+  Indexes {
+    (order_id, payment_id) [pk]
+
+    order_id [name: "idx_order_payments_order"]
+    payment_id [name: "idx_order_payments_payment"]
+  }
+}
+
+
+// ============================================================
+// 15. CREDIT TRANSACTIONS
+// ============================================================
+
+Table credit_transactions {
+  id integer [
+    pk,
+    increment,
+    note: "ID giao dịch công nợ"
+  ]
+
+  company_id integer [
+    not null,
+    note: "Doanh nghiệp có biến động công nợ"
+  ]
+
+  order_id integer [
+    note: "Order liên quan nếu giao dịch phát sinh từ order"
+  ]
+
+  payment_id integer [
+    note: "Payment liên quan nếu giao dịch phát sinh từ thanh toán"
+  ]
+
+  type credit_transaction_type [
+    not null,
+    note: "Loại biến động công nợ"
+  ]
+
+  amount bigint [
+    not null,
+    note: "Giá trị biến động công nợ, có thể dương hoặc âm tùy nghiệp vụ"
+  ]
+
+  balance_after bigint [
+    not null,
+    note: "remaining_credit sau khi thực hiện giao dịch"
+  ]
+
+  description varchar(500) [
+    note: "Mô tả nghiệp vụ để phục vụ audit"
+  ]
+
+  created_by integer [
+    note: "User tạo giao dịch hoặc thực hiện điều chỉnh"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm ghi nhận giao dịch"
+  ]
+
+  Indexes {
+    company_id [name: "idx_credit_transactions_company"]
+    order_id [name: "idx_credit_transactions_order"]
+    payment_id [name: "idx_credit_transactions_payment"]
+    created_at [name: "idx_credit_transactions_created_at"]
+  }
+}
+
+
+// ============================================================
+// 16. WALLET TRANSACTIONS
+// ============================================================
+
+Table wallet_transactions {
+  id integer [
+    pk,
+    increment,
+    note: "ID giao dịch wallet"
+  ]
+
+  company_id integer [
+    not null,
+    note: "Doanh nghiệp sở hữu số dư wallet"
+  ]
+
+  payment_id integer [
+    note: "Payment tạo ra biến động wallet nếu có"
+  ]
+
+  order_id integer [
+    note: "Order sử dụng hoặc liên quan đến wallet nếu có"
+  ]
+
+  type wallet_transaction_type [
+    not null,
+    note: "Loại biến động wallet"
+  ]
+
+  amount bigint [
+    not null,
+    note: "Giá trị biến động wallet, đơn vị VNĐ"
+  ]
+
+  balance_after bigint [
+    not null,
+    note: "wallet_balance sau khi thực hiện giao dịch"
+  ]
+
+  description varchar(500) [
+    note: "Mô tả nghiệp vụ"
+  ]
+
+  created_by integer [
+    note: "User thực hiện hoặc tạo giao dịch"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm ghi nhận giao dịch"
+  ]
+
+  Indexes {
+    company_id [name: "idx_wallet_transactions_company"]
+    payment_id [name: "idx_wallet_transactions_payment"]
+    order_id [name: "idx_wallet_transactions_order"]
+    created_at [name: "idx_wallet_transactions_created_at"]
+  }
+}
+
+
+// ============================================================
+// 17. LOGISTICS WEBHOOK LOGS
+// ============================================================
+
+Table logistics_webhook_logs {
+  id integer [
+    pk,
+    increment,
+    note: "ID của webhook log"
+  ]
+
+  carrier_id integer [
+    note: "Nhà vận chuyển gửi webhook"
+  ]
+
+  logistics_id integer [
+    note: "Chuyến logistics mà webhook liên quan"
+  ]
+
+  tracking_number varchar(100) [
+    note: "Mã vận đơn trong webhook"
+  ]
+
+  event_type varchar(100) [
+    note: "Loại sự kiện do provider gửi, ví dụ SHIPPED, DELIVERED"
+  ]
+
+  payload jsonb [
+    not null,
+    note: "Payload JSON nguyên bản do nhà vận chuyển gửi"
+  ]
+
+  status webhook_status_type [
+    not null,
+    default: `webhook_status_type::received`,
+    note: "Trạng thái xử lý webhook nội bộ"
+  ]
+
+  error_message varchar(1000) [
+    note: "Thông tin lỗi nếu xử lý webhook thất bại"
+  ]
+
+  received_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm server nhận webhook"
+  ]
+
+  processed_at timestamp [
+    note: "Thời điểm webhook được xử lý thành công"
+  ]
+
+  Indexes {
+    carrier_id [name: "idx_webhook_logs_carrier"]
+    logistics_id [name: "idx_webhook_logs_logistics"]
+    tracking_number [name: "idx_webhook_logs_tracking"]
+    status [name: "idx_webhook_logs_status"]
+    received_at [name: "idx_webhook_logs_received_at"]
+  }
+}
+
+
+// ============================================================
+// 18. NOTIFICATIONS
+// ============================================================
+
+// Notification được tạo cho một user cụ thể.
+//
+// Ví dụ:
+//
+// - Admin duyệt Order #100
+//   → notification cho user đã tạo Order #100
+//
+// - Customer tạo Payment #20
+//   → notification cho ACCOUNTANT
+//
+// - Carrier cập nhật Logistics #15 → DELIVERED
+//   → notification cho user của Order tương ứng.
+//
+// reference_type + reference_id dùng để liên kết notification
+// tới entity nghiệp vụ tương ứng.
+//
+// Không dùng FK trực tiếp cho reference_id vì một notification
+// có thể tham chiếu order, payment, logistics, company...
+
+// ============================================================
+// 18. NOTIFICATIONS
+// ============================================================
+
+Table notifications {
+  id bigint [
+    pk,
+    increment,
+    note: "ID duy nhất của notification"
+  ]
+
+  user_id integer [
+    not null,
+    note: "User nhận notification"
+  ]
+
+  actor_user_id integer [
+    note: "User thực hiện hành động tạo ra notification; NULL nếu notification được tạo tự động bởi hệ thống"
+  ]
+
+  type notification_type [
+    not null,
+    note: "Loại notification dùng để frontend/backend xác định nghiệp vụ và cách hiển thị"
+  ]
+
+  title varchar(200) [
+    not null,
+    note: "Tiêu đề notification"
+  ]
+
+  message varchar(1000) [
+    not null,
+    note: "Nội dung notification"
+  ]
+
+  reference_type notification_reference_type [
+    note: "Loại entity mà notification tham chiếu tới, ví dụ ORDER, PAYMENT, LOGISTICS"
+  ]
+
+  reference_id bigint [
+    note: "ID của entity được tham chiếu; không dùng FK vì reference có thể thuộc nhiều entity khác nhau"
+  ]
+
+  action_url varchar(500) [
+    note: "URL/route frontend dùng để điều hướng user tới màn hình chi tiết liên quan khi click notification"
+  ]
+
+  read_at timestamp [
+    note: "Thời điểm user đọc notification; NULL nghĩa là chưa đọc"
+  ]
+
+  created_at timestamp [
+    not null,
+    default: `now()`,
+    note: "Thời điểm notification được tạo"
+  ]
+
+  Indexes {
+    user_id [
+      name: "idx_notifications_user"
+    ]
+
+    type [
+      name: "idx_notifications_type"
+    ]
+
+    (user_id, read_at) [
+      name: "idx_notifications_user_read_at"
+    ]
+
+    (user_id, created_at) [
+      name: "idx_notifications_user_created_at"
+    ]
+
+    (reference_type, reference_id) [
+      name: "idx_notifications_reference"
+    ]
+  }
+}
+
+
+// ============================================================
+// 19. FOREIGN KEYS
+// ============================================================
+
+
+// ------------------------------------------------------------
+// Company
+// ------------------------------------------------------------
+
+Ref: users.company_id >? companies.id
+
+
+// ------------------------------------------------------------
+// RBAC
+// ------------------------------------------------------------
+
+Ref: user_roles.user_id > users.id
+Ref: user_roles.role_id > roles.id
+
+Ref: role_permissions.role_id > roles.id
+Ref: role_permissions.permission_id > permissions.id
+
+
+// ------------------------------------------------------------
+// Product Catalog
+// ------------------------------------------------------------
+
+Ref: products.category_id > categories.id
+
+Ref: product_variants.product_id > products.id
+
+Ref: pricing_tiers.product_variant_id > product_variants.id
+
+Ref: product_variant_images.product_variant_id > product_variants.id
+
+
+// ------------------------------------------------------------
+// Orders
+// ------------------------------------------------------------
+
+Ref: orders.company_id > companies.id
+Ref: orders.user_id > users.id
+
+Ref: orders.approved_by >? users.id
+Ref: orders.cancelled_by >? users.id
+
+Ref: order_items.order_id > orders.id
+Ref: order_items.variant_id > product_variants.id
+
+
+// ------------------------------------------------------------
+// Logistics
+// ------------------------------------------------------------
+
+Ref: logistics.order_id > orders.id
+Ref: logistics.carrier_id > shipping_carriers.id
+Ref: logistics.truck_type_id > truck_types.id
+
+Ref: logistics_items.logistics_id > logistics.id
+Ref: logistics_items.order_item_id > order_items.id
+
+
+// ------------------------------------------------------------
+// Payments
+// ------------------------------------------------------------
+
+Ref: payments.company_id > companies.id
+Ref: payments.user_id > users.id
+
+Ref: payments.approved_by >? users.id
+Ref: payments.rejected_by >? users.id
+
+
+// ------------------------------------------------------------
+// Order ↔ Payment
+// ------------------------------------------------------------
+
+Ref: order_payments.order_id > orders.id
+Ref: order_payments.payment_id > payments.id
+
+
+// ------------------------------------------------------------
+// Credit Ledger
+// ------------------------------------------------------------
+
+Ref: credit_transactions.company_id > companies.id
+Ref: credit_transactions.order_id >? orders.id
+Ref: credit_transactions.payment_id >? payments.id
+Ref: credit_transactions.created_by >? users.id
+
+
+// ------------------------------------------------------------
+// Wallet Ledger
+// ------------------------------------------------------------
+
+Ref: wallet_transactions.company_id > companies.id
+Ref: wallet_transactions.payment_id >? payments.id
+Ref: wallet_transactions.order_id >? orders.id
+Ref: wallet_transactions.created_by >? users.id
+
+
+// ------------------------------------------------------------
+// Logistics Webhooks
+// ------------------------------------------------------------
+
+Ref: logistics_webhook_logs.carrier_id >? shipping_carriers.id
+Ref: logistics_webhook_logs.logistics_id >? logistics.id
+
+
+// ------------------------------------------------------------
+// Notifications
+// ------------------------------------------------------------
+
+Ref: notifications.user_id > users.id
+Ref: notifications.actor_user_id >? users.id

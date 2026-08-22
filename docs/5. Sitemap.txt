@@ -1,0 +1,1759 @@
+# ============================================================
+# B2B LOGISTICS SYSTEM
+# SITEMAP
+# ============================================================
+
+# Tech Stack
+# Backend: Node.js + Express.js
+# Template Engine: LiquidJS
+# Database: PostgreSQL
+
+
+# ============================================================
+# 1. PUBLIC / AUTHENTICATION
+# ============================================================
+
+/
+├── /login
+├── /forgot-password
+└── /reset-password/:token
+
+
+# ============================================================
+# 2. CLIENT — BUYER / COMPANY
+# ============================================================
+
+/app
+│
+├── /dashboard
+│
+├── /products
+│   ├── /products
+│   └── /products/:slug
+│
+├── /cart
+│
+├── /orders
+│   ├── /orders
+│   ├── /orders/:id
+│   └── /orders/:id/tracking
+│
+├── /payments
+│   ├── /payments
+│   ├── /payments/create
+│   └── /payments/:id
+│
+├── /credit
+│   ├── /credit
+│   └── /credit/transactions
+│
+├── /wallet
+│   ├── /wallet
+│   └── /wallet/transactions
+│
+├── /notifications
+│
+└── /profile
+    ├── /profile
+    └── /profile/security
+
+
+# ============================================================
+# 3. ADMIN / INTERNAL STAFF
+# ============================================================
+
+/admin
+│
+├── /dashboard
+│
+├── /orders
+│   ├── /orders
+│   └── /orders/:id
+│
+├── /products
+│   ├── /products
+│   ├── /products/create
+│   ├── /products/:id
+│   └── /products/:id/edit
+│
+├── /categories
+│   ├── /categories
+│   ├── /categories/create
+│   └── /categories/:id/edit
+│
+├── /pricing
+│   ├── /pricing
+│   └── /pricing/:variantId
+│
+├── /companies
+│   ├── /companies
+│   ├── /companies/:id
+│   └── /companies/:id/credit
+│
+├── /users
+│   ├── /users
+│   └── /users/:id
+│
+├── /payments
+│   ├── /payments
+│   └── /payments/:id
+│
+├── /credit
+│   ├── /credit
+│   └── /credit/transactions
+│
+├── /wallet
+│   ├── /wallet
+│   └── /wallet/transactions
+│
+├── /logistics
+│   ├── /logistics
+│   ├── /logistics/:id
+│   └── /logistics/:id/tracking
+│
+├── /shipping-carriers
+│   ├── /shipping-carriers
+│   ├── /shipping-carriers/create
+│   └── /shipping-carriers/:id/edit
+│
+├── /truck-types
+│   ├── /truck-types
+│   ├── /truck-types/create
+│   └── /truck-types/:id/edit
+│
+├── /notifications
+│
+└── /settings
+    ├── /settings/roles
+    ├── /settings/permissions
+    └── /settings/system
+
+
+# ============================================================
+# 4. SUPER ADMIN
+# ============================================================
+
+/super-admin
+│
+├── /dashboard
+│
+├── /companies
+│   ├── /companies
+│   ├── /companies/create
+│   ├── /companies/:id
+│   └── /companies/:id/edit
+│
+├── /users
+│   ├── /users
+│   ├── /users/create
+│   ├── /users/:id
+│   └── /users/:id/edit
+│
+├── /roles
+│   ├── /roles
+│   ├── /roles/create
+│   └── /roles/:id/edit
+│
+├── /permissions
+│   └── /permissions
+│
+├── /credit
+│   ├── /credit
+│   └── /credit/:companyId
+│
+├── /wallet
+│   ├── /wallet
+│   └── /wallet/:companyId
+│
+├── /products
+│   ├── /products
+│   ├── /products/create
+│   ├── /products/:id
+│   └── /products/:id/edit
+│
+├── /categories
+│   ├── /categories
+│   ├── /categories/create
+│   └── /categories/:id/edit
+│
+├── /pricing
+│   ├── /pricing
+│   └── /pricing/:variantId
+│
+├── /shipping-carriers
+│   ├── /shipping-carriers
+│   ├── /shipping-carriers/create
+│   └── /shipping-carriers/:id/edit
+│
+├── /truck-types
+│   ├── /truck-types
+│   ├── /truck-types/create
+│   └── /truck-types/:id/edit
+│
+├── /orders
+│   ├── /orders
+│   └── /orders/:id
+│
+├── /payments
+│   ├── /payments
+│   └── /payments/:id
+│
+├── /logistics
+│   ├── /logistics
+│   └── /logistics/:id
+│
+├── /notifications
+│
+└── /system
+    ├── /system/settings
+    ├── /system/webhooks
+    └── /system/audit-logs
+
+
+# ============================================================
+# 5. NOTIFICATION CENTER
+# ============================================================
+
+/notifications
+│
+├── All notifications
+├── Unread notifications
+└── Notification detail
+
+Notification sources:
+- Order created
+- Order approved
+- Order cancelled
+- Order changed to shipping
+- Order delivered
+- Payment created
+- Payment approved
+- Payment rejected
+- Credit limit changed
+- Credit balance changed
+- Wallet balance changed
+- Logistics assigned
+- Logistics changed to in_transit
+- Logistics completed
+- Webhook processing failed
+- User account suspended
+
+
+# ============================================================
+# 6. ERROR / SYSTEM PAGES
+# ============================================================
+
+/403
+/404
+/500
+
+
+# ============================================================
+# 7. PRODUCT DETAIL FLOW
+# ============================================================
+
+/products/:slug
+│
+├── Product information
+│   ├── Product name
+│   ├── Category
+│   ├── Description
+│   ├── Thumbnail
+│   └── MOQ
+│
+├── Product Variants
+│   ├── SKU
+│   ├── Variant title
+│   ├── Base price
+│   ├── Stock
+│   ├── CBM / box
+│   ├── Weight / box
+│   └── Variant images
+│
+├── Pricing Tiers
+│   ├── Minimum quantity
+│   ├── Maximum quantity
+│   └── Discount percentage
+│
+└── Add to Cart
+
+
+# ============================================================
+# 8. ORDER FLOW
+# ============================================================
+
+Product
+│
+▼
+Product Variant
+│
+▼
+Cart
+│
+▼
+Create Order
+│
+▼
+Validate Order
+│
+├── User active
+├── Company active
+├── Variant active
+├── Quantity >= MOQ
+├── Quantity valid
+└── Stock sufficient
+│
+▼
+Calculate Pricing
+│
+▼
+Calculate Total
+│
+▼
+Select Payment Method
+│
+├── Credit
+│   │
+│   ▼
+│   Reserve Credit
+│
+├── Wallet
+│   │
+│   ▼
+│   Reserve / Deduct Wallet
+│
+└── Bank Transfer
+    │
+    ▼
+    Payment Required
+│
+▼
+Create Order
+│
+▼
+Order Items Snapshot
+│
+▼
+Order = pending
+│
+▼
+Order Approval
+│
+▼
+Order = approved
+│
+▼
+Logistics Planning
+│
+▼
+Shipping
+│
+▼
+Delivered
+
+
+# ============================================================
+# 9. ORDER STATUS
+# ============================================================
+
+Order.status
+
+pending
+│
+├── approved
+│   │
+│   ├── approved_local
+│   │
+│   └── shipping
+│       │
+│       └── delivered
+│
+└── cancelled
+
+Meaning:
+
+pending
+Order đã được tạo và đang chờ xử lý.
+
+approved
+Order đã được nội bộ phê duyệt.
+
+approved_local
+Order đã được phê duyệt nhưng chưa đồng bộ thành công
+với shipping carrier.
+
+shipping
+Order đang được vận chuyển.
+
+delivered
+Toàn bộ logistics của order đã completed.
+
+cancelled
+Order đã bị hủy.
+
+
+# ============================================================
+# 10. ORDER PAYMENT STATUS
+# ============================================================
+
+Order.payment_status
+
+unpaid
+│
+├── partial
+│   │
+│   └── paid
+│
+└── paid
+
+Calculation:
+
+allocated_amount =
+SUM(order_payments.amount_allocated)
+
+allocated_amount = 0
+=> unpaid
+
+allocated_amount < order.total_price
+=> partial
+
+allocated_amount >= order.total_price
+=> paid
+
+Order.payment_status is independent
+from Order.status.
+
+
+# ============================================================
+# 11. PAYMENT FLOW
+# ============================================================
+
+Company
+│
+▼
+Create Payment Declaration
+│
+▼
+Payment = pending
+│
+▼
+Accountant / Authorized Staff
+verifies bank transaction
+│
+├── Invalid
+│   │
+│   ▼
+│   Payment = rejected
+│   │
+│   ▼
+│   Save rejection reason
+│
+└── Valid
+    │
+    ▼
+    Payment = approved
+    │
+    ▼
+    Allocate Payment
+    │
+    ├── Order A
+    ├── Order B
+    └── Remaining Amount
+    │
+    ▼
+    Wallet
+
+
+# ============================================================
+# 12. PAYMENT ALLOCATION
+# ============================================================
+
+Approved Payment
+│
+▼
+Determine available amount
+│
+▼
+Allocate to eligible Order
+│
+▼
+Remaining amount?
+│
+├── YES
+│   │
+│   ▼
+│   Allocate to next eligible Order
+│
+└── NO
+    │
+    ▼
+    Payment fully allocated
+│
+▼
+If amount remains after all allocations
+│
+▼
+Create wallet transaction
+│
+type = overpayment
+│
+▼
+Increase company.wallet_balance
+
+
+# ============================================================
+# 13. PAYMENT DETAIL
+# ============================================================
+
+/payments/:id
+
+Payment information
+│
+├── Company
+├── Submitted by
+├── Amount
+├── Bank reference
+├── Payment status
+├── Created at
+├── Approved at
+├── Approved by
+├── Rejected at
+├── Rejected by
+└── Rejection reason
+
+Allocation
+│
+├── Order A
+├── Order B
+└── Wallet
+
+
+# ============================================================
+# 14. CREDIT FLOW
+# ============================================================
+
+Super Admin / Authorized Staff
+│
+▼
+Assign Credit Limit
+│
+▼
+Company.credit_limit
+│
+▼
+Company.remaining_credit
+│
+▼
+Create credit transaction
+│
+type = credit_limit_assigned
+│
+▼
+Company creates credit order
+│
+▼
+Check remaining_credit
+│
+├── Insufficient
+│   │
+│   ▼
+│   Reject order
+│
+└── Sufficient
+    │
+    ▼
+    Reserve Credit
+    │
+    ▼
+    credit_reserved
+    │
+    ▼
+    remaining_credit decreases
+
+Order cancelled
+│
+▼
+Release reserved credit
+│
+▼
+credit_released
+│
+▼
+remaining_credit increases
+
+Order completed / delivered
+│
+▼
+Debt remains outstanding
+│
+▼
+Debt payment
+│
+▼
+debt_payment
+│
+▼
+Financial credit state updated
+
+
+# ============================================================
+# 15. CREDIT TRANSACTIONS
+# ============================================================
+
+/credit/transactions
+
+Credit Event
+│
+├── credit_limit_assigned
+├── credit_reserved
+├── credit_released
+├── debt_payment
+└── adjustment
+│
+▼
+credit_transactions
+│
+├── company_id
+├── amount
+├── balance_after
+├── type
+├── description
+├── performed_by
+└── created_at
+
+
+# ============================================================
+# 16. WALLET FLOW
+# ============================================================
+
+Wallet balance
+│
+▼
+Wallet Event
+│
+├── Overpayment
+│   │
+│   ▼
+│   wallet_balance increases
+│
+├── Wallet Payment
+│   │
+│   ▼
+│   wallet_balance decreases
+│
+├── Refund
+│   │
+│   ▼
+│   wallet_balance increases
+│
+└── Adjustment
+    │
+    ▼
+    wallet_balance adjusted
+
+
+# ============================================================
+# 17. WALLET TRANSACTIONS
+# ============================================================
+
+/wallet/transactions
+
+Wallet Event
+│
+├── overpayment
+├── wallet_payment
+├── refund
+└── adjustment
+│
+▼
+wallet_transactions
+│
+├── company_id
+├── amount
+├── balance_after
+├── type
+├── description
+├── performed_by
+└── created_at
+
+
+# ============================================================
+# 18. LOGISTICS FLOW
+# ============================================================
+
+Approved Order
+│
+▼
+Calculate required CBM
+│
+▼
+Calculate required weight
+│
+▼
+Determine truck requirement
+│
+▼
+Select Truck Type
+│
+├── max_cbm
+└── max_weight_kg
+│
+▼
+Select Shipping Carrier
+│
+▼
+Create Logistics
+│
+├── Order
+├── Carrier
+├── Truck Type
+├── Planned CBM
+├── Truck Plate
+├── Driver Name
+└── Tracking Number
+│
+▼
+delivery_status = assigned
+│
+▼
+Send shipment request
+to carrier
+│
+▼
+Carrier accepts
+│
+▼
+delivery_status = in_transit
+│
+▼
+Carrier delivers
+│
+▼
+delivery_status = completed
+
+
+# ============================================================
+# 19. MULTI-TRIP LOGISTICS
+# ============================================================
+
+Order
+│
+├── total_cbm = 72
+│
+▼
+Planning
+│
+├── Logistics #1
+│   ├── Truck Type: heavy_15t
+│   └── planned_cbm = 60
+│
+└── Logistics #2
+    ├── Truck Type: medium_2_5t
+    └── planned_cbm = 12
+
+Each logistics has:
+
+- carrier
+- truck type
+- planned_cbm
+- truck plate
+- driver
+- tracking number
+- delivery_status
+
+Order becomes delivered only when:
+
+ALL logistics.delivery_status = completed
+
+
+# ============================================================
+# 20. LOGISTICS DETAIL
+# ============================================================
+
+/logistics/:id
+
+Logistics
+│
+├── Order
+├── Shipping Carrier
+├── Truck Type
+├── Planned CBM
+├── Truck Plate
+├── Driver Name
+├── Tracking Number
+├── Delivery Status
+├── Assigned At
+├── Started At
+└── Completed At
+
+Tracking
+│
+└── Carrier events / webhook history
+
+
+# ============================================================
+# 21. WEBHOOK FLOW
+# ============================================================
+
+Shipping Carrier
+│
+│ HTTP POST
+▼
+/webhooks/:carrier
+│
+▼
+Receive Payload
+│
+▼
+Save Raw Payload
+│
+▼
+Create logistics_webhook_logs
+│
+status = received
+│
+▼
+Validate
+│
+├── Carrier
+├── Signature
+├── Event Type
+├── Tracking Number
+└── Idempotency / Duplicate Event
+│
+├── Invalid
+│   │
+│   ▼
+│   status = failed
+│   │
+│   ▼
+│   Save error_message
+│
+└── Valid
+    │
+    ▼
+    Find Logistics
+    │
+    ├── Not Found
+    │   │
+    │   ▼
+    │   failed
+    │
+    └── Found
+        │
+        ▼
+        Process Event
+        │
+        ▼
+        Update Logistics
+        │
+        ▼
+        status = processed
+        │
+        ▼
+        processed_at
+
+
+# ============================================================
+# 22. WEBHOOK RETRY
+# ============================================================
+
+Webhook
+│
+▼
+status = failed
+│
+▼
+Store:
+│
+├── raw payload
+├── error message
+├── received_at
+└── retry information
+│
+▼
+Retry
+│
+▼
+Process Again
+│
+├── Success
+│   │
+│   ▼
+│   processed
+│
+└── Failure
+    │
+    ▼
+    failed
+
+
+# ============================================================
+# 23. NOTIFICATION CENTER
+# ============================================================
+
+/notifications
+│
+├── All notifications
+├── Unread notifications
+└── Notification detail
+
+Notification
+│
+├── recipient_user_id
+├── type
+├── title
+├── message
+├── entity_type
+├── entity_id
+├── is_read
+└── created_at
+
+Notification is used for:
+
+- Communication
+- UI alerts
+- Business event notifications
+
+Notification does NOT replace:
+
+- Audit logs
+- Credit transactions
+- Wallet transactions
+- Webhook logs
+
+
+# ============================================================
+# 24. NOTIFICATION EVENTS
+# ============================================================
+
+Business Event
+│
+├── Order created
+├── Order approved
+├── Order cancelled
+├── Order changed to shipping
+├── Order delivered
+├── Payment created
+├── Payment approved
+├── Payment rejected
+├── Credit changed
+├── Wallet changed
+├── Logistics assigned
+├── Logistics in_transit
+├── Logistics completed
+├── Webhook failed
+└── User suspended
+│
+▼
+Create Notification
+│
+▼
+Assign Recipient
+│
+▼
+Store Notification
+│
+▼
+Notification Center
+│
+▼
+User reads notification
+│
+▼
+is_read = true
+
+
+# ============================================================
+# 25. PRODUCT MANAGEMENT
+# ============================================================
+
+/admin/products
+
+Products
+│
+├── Create Product
+├── View Product
+├── Edit Product
+└── Manage Variants
+
+Create Product
+│
+├── Category
+├── Name
+├── Description
+├── Thumbnail
+└── MOQ
+│
+▼
+Create Product Variant
+│
+├── SKU
+├── Title
+├── Stock
+├── CBM
+├── Weight
+└── Base Price
+│
+▼
+Upload Variant Images
+│
+▼
+Create Pricing Tiers
+│
+▼
+Activate Product
+
+
+# ============================================================
+# 26. PRODUCT VARIANT MANAGEMENT
+# ============================================================
+
+/admin/products/:id
+
+Product
+│
+├── Basic Information
+│
+├── Variants
+│   │
+│   ├── SKU
+│   ├── Title
+│   ├── Stock
+│   ├── CBM
+│   ├── Weight
+│   └── Base Price
+│
+├── Variant Images
+│
+└── Pricing Tiers
+
+Variant
+│
+├── /variants/:variantId
+├── /variants/:variantId/edit
+├── /variants/:variantId/images
+└── /variants/:variantId/pricing
+
+
+# ============================================================
+# 27. PRICING MANAGEMENT
+# ============================================================
+
+/admin/pricing
+│
+├── Pricing Overview
+└── /pricing/:variantId
+
+Variant
+│
+▼
+Base Price
+│
+▼
+Pricing Tiers
+│
+├── Minimum Quantity
+├── Maximum Quantity
+└── Discount Percentage
+
+Example:
+
+1 - 19 boxes
+discount = 0%
+
+20 - 49 boxes
+discount = 5%
+
+50+ boxes
+discount = 10%
+
+Historical order prices are NOT recalculated
+from current pricing tiers.
+
+
+# ============================================================
+# 28. PRODUCT IMAGE MANAGEMENT
+# ============================================================
+
+Product
+│
+▼
+Thumbnail
+│
+▼
+Primary product image
+
+Product Variant
+│
+▼
+product_variant_images
+│
+├── image_url
+├── sort_order
+└── variant_id
+│
+▼
+Variant Gallery
+
+
+# ============================================================
+# 29. STOCK FLOW
+# ============================================================
+
+Product Variant
+│
+▼
+stock
+│
+▼
+Customer enters quantity
+│
+▼
+Validate quantity
+│
+├── quantity > stock
+│   │
+│   ▼
+│   Reject
+│
+└── quantity <= stock
+    │
+    ▼
+    Continue Order Flow
+    │
+    ▼
+    Apply stock business rule
+
+IMPORTANT:
+
+Stock is only a catalog/order quantity constraint.
+
+The system does NOT implement:
+
+- Warehouse Management
+- Warehouse
+- Bin
+- Inventory receipt
+- Inventory issue
+- Stock transfer
+- Inventory movement ledger
+- Batch / Lot
+- Expiry management
+
+
+# ============================================================
+# 30. COMPANY MANAGEMENT
+# ============================================================
+
+/admin/companies
+
+Company
+│
+├── Company Information
+├── Users
+├── Orders
+├── Payments
+├── Credit
+├── Wallet
+├── Credit Transactions
+└── Wallet Transactions
+
+Company financial information:
+
+- credit_limit
+- remaining_credit
+- wallet_balance
+
+
+# ============================================================
+# 31. USER MANAGEMENT
+# ============================================================
+
+/admin/users
+
+User
+│
+├── User Information
+├── Company
+├── Status
+├── Roles
+└── Permissions
+
+Create User
+│
+▼
+Assign Company
+│
+▼
+Assign Role
+│
+▼
+User Login
+│
+▼
+Authentication
+│
+▼
+Authorization
+
+User Status:
+
+active
+suspended
+
+Suspended users:
+
+- Cannot login
+- Cannot perform authenticated business operations
+
+
+# ============================================================
+# 32. RBAC FLOW
+# ============================================================
+
+HTTP Request
+│
+▼
+Authentication Middleware
+│
+▼
+Identify User
+│
+▼
+Check User Status
+│
+├── suspended
+│   │
+│   ▼
+│   Reject
+│
+└── active
+    │
+    ▼
+    Load Roles
+    │
+    ▼
+    Load Permissions
+    │
+    ▼
+    Authorization Middleware
+    │
+    ▼
+    Check Required Permission
+    │
+    ├── Missing
+    │   │
+    │   ▼
+    │   403 Forbidden
+    │
+    └── Granted
+        │
+        ▼
+        Controller
+        │
+        ▼
+        Service
+        │
+        ▼
+        Database
+
+RBAC:
+
+User
+│
+▼
+User Roles
+│
+▼
+Roles
+│
+▼
+Role Permissions
+│
+▼
+Permissions
+
+
+# ============================================================
+# 33. AUTHENTICATION FLOW
+# ============================================================
+
+User
+│
+▼
+/login
+│
+▼
+Validate Email / Password
+│
+├── Invalid
+│   │
+│   ▼
+│   Authentication Error
+│
+└── Valid
+    │
+    ▼
+    Check user.status
+    │
+    ├── suspended
+    │   │
+    │   ▼
+    │   Reject Login
+    │
+    └── active
+        │
+        ▼
+        Create Authentication Session / Token
+        │
+        ▼
+        Load Roles / Permissions
+        │
+        ▼
+        Redirect to Application Area
+
+
+# ============================================================
+# 34. CLIENT NAVIGATION
+# ============================================================
+
+CLIENT / BUYER
+│
+▼
+Dashboard
+│
+├── Products
+│   └── Product Detail
+│       └── Add to Cart
+│
+├── Cart
+│   └── Create Order
+│
+├── Orders
+│   ├── Order List
+│   ├── Order Detail
+│   └── Tracking
+│
+├── Payments
+│   ├── Payment List
+│   ├── Create Payment
+│   └── Payment Detail
+│
+├── Credit
+│   ├── Credit Overview
+│   └── Transactions
+│
+├── Wallet
+│   ├── Wallet Overview
+│   └── Transactions
+│
+├── Notifications
+│
+└── Profile
+    └── Security
+
+
+# ============================================================
+# 35. ADMIN NAVIGATION
+# ============================================================
+
+ADMIN / INTERNAL STAFF
+│
+▼
+Dashboard
+│
+├── Orders
+│   ├── Order List
+│   └── Order Detail
+│
+├── Products
+│   ├── Product List
+│   ├── Create Product
+│   ├── Product Detail
+│   └── Edit Product
+│
+├── Categories
+│
+├── Pricing
+│
+├── Companies
+│
+├── Users
+│
+├── Payments
+│
+├── Credit
+│
+├── Wallet
+│
+├── Logistics
+│
+├── Shipping Carriers
+│
+├── Truck Types
+│
+├── Notifications
+│
+└── Settings
+    ├── Roles
+    ├── Permissions
+    └── System
+
+
+# ============================================================
+# 36. SUPER ADMIN NAVIGATION
+# ============================================================
+
+SUPER ADMIN
+│
+▼
+Dashboard
+│
+├── Companies
+│
+├── Users
+│
+├── Roles
+│
+├── Permissions
+│
+├── Credit
+│
+├── Wallet
+│
+├── Products
+│
+├── Categories
+│
+├── Pricing
+│
+├── Orders
+│
+├── Payments
+│
+├── Logistics
+│
+├── Shipping Carriers
+│
+├── Truck Types
+│
+├── Notifications
+│
+└── System
+    ├── Settings
+    ├── Webhooks
+    └── Audit Logs
+
+
+# ============================================================
+# 37. ACCOUNTANT NAVIGATION
+# ============================================================
+
+ACCOUNTANT
+│
+▼
+Dashboard
+│
+├── Payments
+│   ├── Payment List
+│   └── Payment Detail
+│
+├── Credit
+│   └── Credit Transactions
+│
+├── Wallet
+│   └── Wallet Transactions
+│
+├── Orders
+│   └── Payment Information
+│
+└── Notifications
+
+Accountant permissions determine:
+
+- Payment verification
+- Payment approval
+- Payment rejection
+- Credit adjustment
+- Wallet adjustment
+
+
+# ============================================================
+# 38. HIGH-LEVEL NAVIGATION
+# ============================================================
+
+                        +----------------+
+                        |     LOGIN      |
+                        +-------+--------+
+                                |
+                                v
+                   +------------+------------+
+                   |                         |
+                   v                         v
+             CLIENT / BUYER           INTERNAL STAFF
+                   |                         |
+                   v                         v
+              DASHBOARD                 DASHBOARD
+                   |                         |
+         +---------+---------+       +-------+-------+
+         |         |         |       |       |       |
+         v         v         v       v       v       v
+      Products   Orders   Payments  Orders Products Logistics
+         |         |         |       |       |       |
+         v         v         v       v       v       v
+        Cart    Tracking   Credit  Approve Pricing Tracking
+         |                   |       |
+         v                   v       v
+       Order                Wallet  Logistics
+         |                           |
+         v                           v
+     Logistics                    Delivery
+         |
+         v
+      Delivery
+
+
+# ============================================================
+# 39. SUPER ADMIN HIGH-LEVEL NAVIGATION
+# ============================================================
+
+                        SUPER ADMIN
+                             |
+                             v
+                         DASHBOARD
+                             |
+             +---------------+----------------+
+             |               |                |
+             v               v                v
+         Companies         Users             RBAC
+             |               |                |
+             v               v                v
+       Credit Limit      User Status    Roles / Permissions
+             |
+             +-------------------------------+
+                             |
+                             v
+                      BUSINESS DATA
+                             |
+         +-------------------+-------------------+
+         |                   |                   |
+         v                   v                   v
+      Products             Orders            Logistics
+         |                   |                   |
+         v                   v                   v
+      Pricing             Payments           Carriers
+                             |
+                             v
+                          Wallet
+                             |
+                             v
+                           Credit
+
+
+# ============================================================
+# 40. CORE MODULES
+# ============================================================
+
+AUTHENTICATION
+│
+├── Users
+├── Sessions / Tokens
+└── RBAC
+
+COMPANY MANAGEMENT
+│
+├── Companies
+├── Company Users
+├── Credit
+└── Wallet
+
+RBAC
+│
+├── Roles
+├── Permissions
+├── User Roles
+└── Role Permissions
+
+PRODUCT CATALOG
+│
+├── Categories
+├── Products
+├── Product Variants
+├── Product Thumbnail
+├── Variant Images
+└── Pricing Tiers
+
+ORDER MANAGEMENT
+│
+├── Orders
+├── Order Items
+├── Order Approval
+└── Order Cancellation
+
+PAYMENT MANAGEMENT
+│
+├── Payments
+├── Order Payments
+├── Payment Verification
+└── Payment Allocation
+
+CREDIT MANAGEMENT
+│
+└── Credit Transactions
+
+WALLET MANAGEMENT
+│
+└── Wallet Transactions
+
+LOGISTICS MANAGEMENT
+│
+├── Truck Types
+├── Shipping Carriers
+├── Logistics
+└── Tracking
+
+WEBHOOK MANAGEMENT
+│
+└── Logistics Webhook Logs
+
+NOTIFICATION MANAGEMENT
+│
+└── Notifications
+
+AUDIT / SYSTEM
+│
+├── Audit Logs
+├── Webhook Logs
+├── Credit Transactions
+└── Wallet Transactions
+
+
+# ============================================================
+# 41. CORE ROUTE OWNERSHIP
+# ============================================================
+
+PUBLIC
+│
+├── Authentication
+├── Login
+├── Forgot Password
+└── Reset Password
+
+CLIENT
+│
+├── Catalog
+├── Cart
+├── Orders
+├── Payments
+├── Credit
+├── Wallet
+├── Notifications
+└── Profile
+
+ADMIN
+│
+├── Products
+├── Categories
+├── Pricing
+├── Companies
+├── Users
+├── Orders
+├── Payments
+├── Credit
+├── Wallet
+├── Logistics
+├── Shipping Carriers
+├── Truck Types
+├── Notifications
+└── Settings
+
+SUPER ADMIN
+│
+├── Companies
+├── Users
+├── Roles
+├── Permissions
+├── Credit
+├── Wallet
+├── Products
+├── Categories
+├── Pricing
+├── Orders
+├── Payments
+├── Logistics
+├── Shipping Carriers
+├── Truck Types
+├── Notifications
+└── System
+
+
+# ============================================================
+# 42. COMPLETE SYSTEM NAVIGATION
+# ============================================================
+
+                        B2B LOGISTICS SYSTEM
+                                 |
+                   +-------------+-------------+
+                   |                           |
+                   v                           v
+             AUTHENTICATION               SYSTEM PAGES
+                   |                       ├── 403
+                   |                       ├── 404
+                   |                       └── 500
+                   v
+                  LOGIN
+                   |
+         +---------+---------+
+         |                   |
+         v                   v
+      CLIENT              INTERNAL
+         |                   |
+         |             +-----+------+
+         |             |            |
+         |             v            v
+         |           ADMIN     SUPER ADMIN
+         |             |            |
+         |             |            |
+         +------+------+------------+
+                |
+                v
+         BUSINESS MODULES
+                |
+    +-----------+-----------+
+    |           |           |
+    v           v           v
+ CATALOG      ORDERS      FINANCE
+    |           |           |
+    |           |      +----+----+
+    |           |      |         |
+    v           v      v         v
+Products      Order   Payment   Credit
+Variants      Items      |         |
+Pricing       Approval   |         |
+Images        |          +----+----+
+              |               |
+              v               v
+          Logistics         Wallet
+              |
+              +----------+----------+
+                         |          |
+                         v          v
+                     Carrier    Truck Type
+                         |
+                         v
+                      Tracking
+                         |
+                         v
+                      Webhook
+                         |
+                         v
+                      Delivery
+                         |
+                         v
+                   Notifications
+
+
+# ============================================================
+# END OF FILE 5 — SITEMAP
+# ============================================================
