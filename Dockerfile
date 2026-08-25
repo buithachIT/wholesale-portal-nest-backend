@@ -25,6 +25,7 @@ COPY prisma ./prisma
 COPY prisma.config.ts ./
 COPY tsconfig.json ./
 COPY src/prisma ./src/prisma
+COPY --from=builder /app/src/generated ./src/generated
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 
