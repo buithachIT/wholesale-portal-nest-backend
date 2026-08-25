@@ -36,9 +36,13 @@ services:
       - '${API_PUBLISH_PORT:-127.0.0.1:3010}:3000'
     networks:
       - app_net
+      - ecommerce
 
 volumes:
   postgres_data:
 
 networks:
   app_net:
+  ecommerce:
+    external: true
+    name: ${DB_NETWORK:-api-ecommerce_ecommerce}
