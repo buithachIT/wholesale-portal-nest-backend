@@ -1,0 +1,123 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Get a free hosted Postgres database in seconds: `npx create-db`
+
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "cjs"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+// 1. Enums
+enum EntityStatus {
+  active
+  suspended
+
+  @@map("entity_status")
+}
+
+// 2. Companies (External Organizations)
+model Company {
+  id              Int          @id @default(autoincrement())
+  name            String       @db.VarChar(150)
+  phone           String?      @db.VarChar(20)
+  creditLimit     BigInt       @default(0) @map("credit_limit")
+  remainingCredit BigInt       @default(0) @map("remaining_credit")
+  walletBalance   BigInt       @default(0) @map("wallet_balance")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @default(now()) @updatedAt @map("updated_at")
+
+  users           User[]
+
+  @@map("companies")
+}
+
+// 3. Users
+model User {
+  id            Int            @id @default(autoincrement())
+  companyId     Int?           @map("company_id")
+  email         String         @unique @db.VarChar(255)
+  password      String         @db.VarChar(255)
+  fullName      String         @map("full_name") @db.VarChar(150)
+  status        EntityStatus   @default(active)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @default(now()) @updatedAt @map("updated_at")
+
+  company       Company?       @relation(fields: [companyId], references: [id])
+  userRoles     UserRole[]
+  refreshTokens RefreshToken[]
+
+  @@index([companyId], name: "idx_users_company")
+  @@index([status], name: "idx_users_status")
+  @@map("users")
+}
+
+// 4. Refresh Tokens
+model RefreshToken {
+  id                 BigInt    @id @default(autoincrement())
+  userId             Int       @map("user_id")
+  tokenHash          String    @unique @map("token_hash") @db.VarChar(255)
+  expiresAt          DateTime  @map("expires_at")
+  revokedAt          DateTime? @map("revoked_at")
+  replacedByTokenId  BigInt?   @map("replaced_by_token_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  user               User      @relation(fields: [userId], references: [id])
+
+  @@index([userId], name: "idx_refresh_tokens_user")
+  @@index([expiresAt], name: "idx_refresh_tokens_expires_at")
+  @@index([revokedAt], name: "idx_refresh_tokens_revoked_at")
+  @@index([userId, revokedAt], name: "idx_refresh_tokens_user_revoked")
+  @@map("refresh_tokens")
+}
+
+// 5. Roles & Permissions (RBAC)
+model Role {
+  id              Int              @id @default(autoincrement())
+  name            String           @unique @db.VarChar(100)
+  description     String?          @db.VarChar(255)
+
+  userRoles       UserRole[]
+  rolePermissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id              Int              @id @default(autoincrement())
+  code            String           @unique @db.VarChar(100)
+  description     String?          @db.VarChar(255)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model UserRole {
+  userId Int  @map("user_id")
+  roleId Int  @map("role_id")
+
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@index([roleId], name: "idx_user_roles_role")
+  @@map("user_roles")
+}
+
+model RolePermission {
+  roleId       Int        @map("role_id")
+  permissionId Int        @map("permission_id")
+
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@index([permissionId], name: "idx_role_permissions_permission")
+  @@map("role_permissions")
+}

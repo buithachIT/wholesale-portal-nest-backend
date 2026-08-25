@@ -42,6 +42,9 @@ lerna-debug.log*
 .env.production.local
 .env.local
 
+# local JSON file store
+/user.json
+
 # temp directory
 .temp
 .tmp
