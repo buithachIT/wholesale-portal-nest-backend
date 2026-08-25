@@ -32,8 +32,8 @@ async function bootstrap() {
 
   // Swagger setup
   const config = new DocumentBuilder()
-    .setTitle('B2B Wholesale Portal')
-    .setDescription('B2B Logistics / Wholesale Portal API')
+    .setTitle('B2B Wholesale Portal - By TCP dev team')
+    .setDescription('B2B Logistics / Wholesale Portal API - By TCP dev team')
     .setVersion('0.0.1')
     .addServer(process.env.APP_URL ?? `http://localhost:${port}`)
     .addTag('companies', 'Quản lý doanh nghiệp')
