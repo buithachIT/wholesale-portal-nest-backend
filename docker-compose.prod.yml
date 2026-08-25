@@ -1,5 +1,8 @@
+name: b2b-wholesale
+
 services:
   postgres:
+    profiles: [with-db]
     image: postgres:16-alpine
     container_name: b2b_wholesale_postgres
     restart: unless-stopped
@@ -27,13 +30,10 @@ services:
       - .env
     environment:
       NODE_ENV: production
-      DB_HOST: postgres
-      DEV_DB_HOST: postgres
+    extra_hosts:
+      - 'host.docker.internal:host-gateway'
     ports:
-      - '${API_PUBLISH_PORT:-3000}:3000'
-    depends_on:
-      postgres:
-        condition: service_healthy
+      - '${API_PUBLISH_PORT:-127.0.0.1:3010}:3000'
     networks:
       - app_net
 
